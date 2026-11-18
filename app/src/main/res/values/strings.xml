@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ems Player</string>
+    <string name="app_tagline">Co-Pilote Audio Neuronal</string>
+    <string name="nav_home">Accueil</string>
+    <string name="nav_player">Lecteur</string>
+    <string name="nav_studio">Studio IA</string>
+    <string name="nav_library">Biblio</string>
+    <string name="nav_equalizer">Audio 3D</string>
+    <string name="nav_permissions">Système</string>
+
+    <!-- Player & Controls -->
+    <string name="cd_play_pause">Lecture ou Pause</string>
+    <string name="cd_previous_track">Piste précédente</string>
+    <string name="cd_next_track">Piste suivante</string>
+    <string name="cd_shuffle">Lecture aléatoire</string>
+    <string name="cd_repeat">Répétition de piste</string>
+    <string name="cd_favorite">Ajouter aux favoris</string>
+    <string name="cd_mute">Couper ou rétablir le son</string>
+    <string name="cd_expand_player">Ouvrir le lecteur immersif</string>
+    <string name="cd_permissions_shield">Centre des permissions Android</string>
+
+    <!-- Permissions Android 7 à 15 -->
+    <string name="perm_title">Sécurité &amp; Permissions Android 7 à 15</string>
+    <string name="perm_subtitle">Gestion granulaire des autorisations système (API 24 à 35+) conforme Google Play</string>
+    <string name="perm_audio_title">Bibliothèque Audio Locale</string>
+    <string name="perm_audio_desc_api33">READ_MEDIA_AUDIO (Android 13–15) pour scanner vos MP3, FLAC et WAV locaux.</string>
+    <string name="perm_audio_desc_legacy">READ_EXTERNAL_STORAGE (Android 7–12) avec maxSdkVersion=32.</string>
+    <string name="perm_notif_title">Contrôles &amp; Notifications Média</string>
+    <string name="perm_notif_desc">POST_NOTIFICATIONS (Android 13–15) pour le lecteur sur écran verrouillé et alertes Mix IA.</string>
+    <string name="perm_bt_title">Casques &amp; Audio Bluetooth</string>
+    <string name="perm_bt_desc">BLUETOOTH_CONNECT (Android 12–15) pour détecter les casques sans fil et optimiser le Spatial 3D.</string>
+    <string name="perm_saf_cta">Importer un fichier audio (Sans permission)</string>
+    <string name="perm_scan_cta">Scanner la musique de l\'appareil</string>
+    <string name="perm_grant_cta">Autoriser</string>
+    <string name="perm_granted">Accordée</string>
+    <string name="perm_denied">Non accordée</string>
+    <string name="perm_auto_granted">Accordée automatiquement (Android &lt; %1$d)</string>
+
+    <!-- Notification Service -->
+    <string name="notif_channel_name">Lecture Audio Ems Player</string>
+    <string name="notif_channel_desc">Contrôles de lecture haute fidélité en arrière-plan</string>
+</resources>

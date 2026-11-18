@@ -1,0 +1,85 @@
+name: Build Ems Player APK
+
+on:
+  push:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Prepare debug keystore
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Setup Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Build Debug APK
+        run: gradle assembleDebug
+
+      - name: Align and sign APK (v1 + v2 + v3)
+        run: |
+          SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          BT_DIR=$(ls -d "$SDK_DIR/build-tools"/* | sort -V | tail -n 1)
+          "$BT_DIR/zipalign" -p -f 4 app/build/outputs/apk/debug/app-debug.apk app-aligned.apk
+          "$BT_DIR/apksigner" sign \
+            --min-sdk-version 21 \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --ks debug.keystore \
+            --ks-pass pass:android \
+            --ks-key-alias androiddebugkey \
+            --key-pass pass:android \
+            --out EmsPlayer.apk \
+            app-aligned.apk
+          "$BT_DIR/apksigner" verify --verbose --min-sdk-version 21 EmsPlayer.apk
+          ls -lh EmsPlayer.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmsPlayer-debug-apk
+          path: EmsPlayer.apk
+          if-no-files-found: error
+
+      - name: Publish Direct APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest-apk >/dev/null 2>&1; then
+            gh release upload latest-apk EmsPlayer.apk --clobber
+          else
+            gh release create latest-apk EmsPlayer.apk \
+              --title "Ems Player APK" \
+              --notes "APK Android généré automatiquement par GitHub Actions."
+          fi

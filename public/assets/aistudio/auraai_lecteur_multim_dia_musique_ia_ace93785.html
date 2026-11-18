@@ -1,0 +1,2485 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuraAI — Lecteur Multimédia & Co-Pilote Musical IA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            obsidian: '#06070B',
+            midnight: '#0B101E',
+            deepblue: '#111936',
+            gold: {
+              300: '#FDE68A',
+              400: '#FACC15',
+              500: '#EAB308',
+              600: '#CA8A04',
+              metallic: '#D4AF37',
+            },
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'spin-slow': 'spin 18s linear infinite',
+            'float': 'float 6s ease-in-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-8px)' },
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root {
+      --bg-obsidian: #06070b;
+      --bg-midnight: #0b101e;
+      --gold-metallic: #d4af37;
+      --gold-bright: #facc15;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-obsidian);
+      color: #ffffff;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow-x: hidden;
+      background-image:
+        radial-gradient(circle at 12% 10%, rgba(23, 37, 84, 0.55) 0%, transparent 45%),
+        radial-gradient(circle at 88% 85%, rgba(212, 175, 55, 0.12) 0%, transparent 45%),
+        linear-gradient(180deg, #06070b 0%, #090d18 100%);
+    }
+
+    /* Glassmorphism ultra-moderne */
+    .glass-panel {
+      background: rgba(13, 19, 36, 0.62);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.65);
+    }
+
+    .glass-card {
+      background: linear-gradient(145deg, rgba(19, 28, 54, 0.72) 0%, rgba(9, 13, 25, 0.85) 100%);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(212, 175, 55, 0.16);
+      transition: all 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .glass-card:hover {
+      border-color: rgba(250, 204, 21, 0.55);
+      transform: translateY(-3px);
+      box-shadow: 0 14px 32px -8px rgba(212, 175, 55, 0.18);
+    }
+
+    .gold-gradient-text {
+      background: linear-gradient(135deg, #ffffff 10%, #fde68a 45%, #d4af37 85%, #facc15 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .gold-btn {
+      background: linear-gradient(135deg, #facc15 0%, #d4af37 100%);
+      color: #06070b;
+      font-weight: 700;
+      box-shadow: 0 6px 24px -4px rgba(250, 204, 21, 0.45);
+      transition: all 0.2s ease;
+    }
+
+    .gold-btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 28px -4px rgba(250, 204, 21, 0.6);
+    }
+
+    .gold-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Barres de défilement personnalisées */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(6, 7, 11, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(212, 175, 55, 0.3);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(250, 204, 21, 0.65);
+    }
+
+    /* Sliders personnalisés */
+    input[type='range'].aura-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      height: 5px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type='range'].aura-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #facc15;
+      border: 2px solid #06070b;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.85);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    input[type='range'].aura-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+    }
+
+    /* Animation disque vinyle / pochette */
+    .playing-glow {
+      box-shadow: 0 0 55px -6px rgba(250, 204, 21, 0.45), 0 0 110px -15px rgba(37, 99, 235, 0.5);
+    }
+
+    /* Egaliseur vertical sliders */
+    .eq-slider-wrap {
+      height: 170px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    input[type='range'].eq-vertical {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 150px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      transform: rotate(-90deg);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type='range'].eq-vertical::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #facc15, #d4af37);
+      border: 2px solid #0b101e;
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.8);
+    }
+
+    /* Toast notification */
+    @keyframes slideInToast {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    .toast-enter {
+      animation: slideInToast 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-gold-400 selection:text-obsidian">
+  <!-- Conteneur Toast Notifications (Remplace alert) -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+  <!-- Application Principale -->
+  <div class="flex flex-1 min-h-screen pb-28 md:pb-24">
+    <!-- Barre Latérale (Desktop) -->
+    <aside class="hidden md:flex md:w-72 lg:w-80 flex-col justify-between glass-panel border-r border-white/10 p-6 fixed inset-y-0 left-0 z-30">
+      <div>
+        <!-- Logo AuraAI -->
+        <div class="flex items-center gap-3.5 mb-9 cursor-pointer" onclick="switchView('home')">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-gold-400 via-gold-metallic to-amber-700 p-[1.5px] shadow-lg shadow-gold-500/20">
+            <div class="w-full h-full bg-obsidian rounded-[14px] flex items-center justify-center">
+              <svg class="w-6 h-6 text-gold-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 2v20M8 6v12M16 6v12M4 10v4M20 10v4" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl font-extrabold tracking-tight text-white">Aura<span class="text-gold-400">AI</span></span>
+              <span class="text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-gold-400/15 text-gold-300 border border-gold-400/30">Studio 3.0</span>
+            </div>
+            <p class="text-xs text-slate-400">Co-Pilote Audio Neuronal</p>
+          </div>
+        </div>
+
+        <!-- Navigation Principale -->
+        <nav class="space-y-1.5" id="desktop-nav">
+          <button data-view="home" onclick="switchView('home')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all text-left">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <span>Accueil & Découverte IA</span>
+          </button>
+
+          <button data-view="player" onclick="switchView('player')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all text-left">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
+            </svg>
+            <span>Lecteur Immersif</span>
+            <span id="nav-playing-dot" class="ml-auto w-2 h-2 rounded-full bg-gold-400 hidden animate-ping"></span>
+          </button>
+
+          <button data-view="studio" onclick="switchView('studio')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all text-left">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+            </svg>
+            <span>Studio & Co-Pilote IA</span>
+          </button>
+
+          <button data-view="library" onclick="switchView('library')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all text-left">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span>Bibliothèque & Playlists</span>
+          </button>
+
+          <button data-view="equalizer" onclick="switchView('equalizer')" class="nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all text-left">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            <span>Égaliseur & Audio 3D</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Carte État Moteur Neuronal -->
+      <div class="glass-card rounded-2xl p-4 border border-gold-400/20">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-gold-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Moteur Synthèse IA
+          </span>
+          <span class="text-[11px] font-mono text-slate-400">48kHz / 24-bit</span>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed mb-3">
+          Harmonies génératives en temps réel avec égaliseur 7 bandes et spatialisation 3D active.
+        </p>
+        <button onclick="switchView('studio')" class="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-gold-400/15 border border-white/10 hover:border-gold-400/40 text-xs font-semibold text-gold-300 transition">
+          + Générer un mix IA
+        </button>
+      </div>
+    </aside>
+
+    <!-- Contenu Principal -->
+    <main class="flex-1 md:ml-72 lg:ml-80 w-full max-w-full overflow-x-hidden">
+      <!-- En-tête supérieur mobile & barre de statut -->
+      <header class="sticky top-0 z-20 glass-panel border-b border-white/10 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 md:hidden">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-400 to-amber-700 p-[1.5px]">
+            <div class="w-full h-full bg-obsidian rounded-[10px] flex items-center justify-center">
+              <svg class="w-5 h-5 text-gold-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 2v20M8 6v12M16 6v12M4 10v4M20 10v4" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+          <span class="text-lg font-extrabold tracking-tight">Aura<span class="text-gold-400">AI</span></span>
+        </div>
+
+        <!-- Barre de recherche rapide globale -->
+        <div class="hidden sm:flex items-center flex-1 max-w-md relative">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" stroke-linecap="round" />
+          </svg>
+          <input
+            type="text"
+            id="global-search"
+            oninput="handleGlobalSearch(this.value)"
+            placeholder="Rechercher un titre, un artiste, un BPM ou une ambiance..."
+            class="w-full bg-white/5 border border-white/10 focus:border-gold-400/50 rounded-full py-2 pl-10 pr-4 text-xs sm:text-sm text-white placeholder-slate-400 outline-none transition"
+          />
+        </div>
+
+        <!-- Actions rapides droite -->
+        <div class="flex items-center gap-2.5 sm:gap-3">
+          <button onclick="triggerSmartAutoDJ()" class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-deepblue/90 hover:bg-blue-900/70 border border-gold-400/30 text-xs font-semibold text-gold-300 transition">
+            <svg class="w-4 h-4 text-gold-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span class="hidden sm:inline">Mix Instantané IA</span>
+            <span class="sm:hidden">IA Mix</span>
+          </button>
+
+          <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-gold-500 to-blue-600 p-[1.5px]" title="Profil Studio Pro">
+            <div class="w-full h-full rounded-full bg-midnight flex items-center justify-center text-xs font-bold text-gold-300">
+              AI
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ========================================================= -->
+      <!-- VUE 1 : ACCUEIL & DÉCOUVERTE IA (HOME)                    -->
+      <!-- ========================================================= -->
+      <section id="view-home" class="view-section p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
+        <!-- Bannière Hero & Salutation Dynamique -->
+        <div class="relative overflow-hidden rounded-3xl glass-card p-6 sm:p-9 border border-gold-400/25">
+          <div class="absolute -right-16 -top-16 w-72 h-72 bg-gold-400/15 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -left-16 -bottom-16 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div class="space-y-3 max-w-2xl">
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold-400/10 border border-gold-400/30 text-gold-300 text-xs font-semibold">
+                <span class="w-2 h-2 rounded-full bg-gold-400 animate-pulse"></span>
+                <span id="ai-context-badge">Analyse biométrique & horaire synchronisée</span>
+              </div>
+              <h1 id="dynamic-greeting" class="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+                Bonsoir, prêt pour une immersion sonore <span class="gold-gradient-text">sur mesure</span> ?
+              </h1>
+              <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+                AuraAI a calibré 4 univers acoustiques adaptés à votre rythme actuel. Chaque piste est générée et masterisée dynamiquement avec synthèse harmonique en temps réel.
+              </p>
+              <div class="pt-2 flex flex-wrap items-center gap-3">
+                <button onclick="playTrackByIndex(0)" class="gold-btn px-6 py-3 rounded-full text-sm flex items-center gap-2.5">
+                  <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Lancer la session IA
+                </button>
+                <button onclick="switchView('studio')" class="px-5 py-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/15 text-sm font-semibold text-white transition">
+                  Créer via Prompt IA
+                </button>
+              </div>
+            </div>
+
+            <!-- Carte d'état acoustique IA -->
+            <div class="glass-panel rounded-2xl p-5 min-w-[260px] border border-white/10 space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs uppercase tracking-wider text-slate-400 font-mono">Signature IA Active</span>
+                <span class="text-xs font-bold text-gold-400">98% Match</span>
+              </div>
+              <div class="text-lg font-bold text-white">Nocturne Velours & Zouk</div>
+              <div class="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div class="bg-white/5 rounded-xl p-2">
+                  <div class="text-xs text-slate-400">Tempo</div>
+                  <div class="text-sm font-mono font-bold text-gold-300">98-112</div>
+                </div>
+                <div class="bg-white/5 rounded-xl p-2">
+                  <div class="text-xs text-slate-400">Tonalité</div>
+                  <div class="text-sm font-mono font-bold text-white">Fm / Cm</div>
+                </div>
+                <div class="bg-white/5 rounded-xl p-2">
+                  <div class="text-xs text-slate-400">Énergie</div>
+                  <div class="text-sm font-mono font-bold text-emerald-400">Fluide</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filtres rapides par humeur / énergie -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Filtrer par Humeur & Énergie</h2>
+            <span id="mood-filter-status" class="text-xs text-gold-400 font-medium">Toutes les ambiances</span>
+          </div>
+          <div class="flex items-center gap-2.5 overflow-x-auto pb-2" id="mood-filters">
+            <button onclick="filterHomeByMood('all', this)" class="mood-pill active-mood px-4 py-2 rounded-full text-xs font-bold bg-gold-400 text-obsidian transition whitespace-nowrap">
+              ✨ Tout explorer
+            </button>
+            <button onclick="filterHomeByMood('focus', this)" class="mood-pill px-4 py-2 rounded-full text-xs font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 transition whitespace-nowrap">
+              🧠 Focus & Flow
+            </button>
+            <button onclick="filterHomeByMood('zouk', this)" class="mood-pill px-4 py-2 rounded-full text-xs font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 transition whitespace-nowrap">
+              🌙 Zouk & R&B Nocturne
+            </button>
+            <button onclick="filterHomeByMood('studio', this)" class="mood-pill px-4 py-2 rounded-full text-xs font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 transition whitespace-nowrap">
+              ⚡ Énergie Studio
+            </button>
+            <button onclick="filterHomeByMood('chill', this)" class="mood-pill px-4 py-2 rounded-full text-xs font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 transition whitespace-nowrap">
+              🌌 Chill & Synthwave
+            </button>
+          </div>
+        </div>
+
+        <!-- Suggestions d'ambiances générées par l'IA (4 cartes phares) -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-xl font-bold text-white">Ambiances Générées par l'IA</h2>
+              <p class="text-xs text-slate-400">Playlists évolutives assemblées selon votre profil d'écoute</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="ai-mood-cards">
+            <!-- Injecté via JS -->
+          </div>
+        </div>
+
+        <!-- Section Écoutés récemment & Recommandations intelligentes -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Écoutés récemment (5 cols) -->
+          <div class="lg:col-span-5 glass-panel rounded-3xl p-5 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-bold text-white">Écoutés récemment</h3>
+              <button onclick="switchView('library')" class="text-xs font-semibold text-gold-400 hover:underline">Voir tout</button>
+            </div>
+            <div id="recent-tracks-list" class="space-y-2.5">
+              <!-- Injecté via JS -->
+            </div>
+          </div>
+
+          <!-- Recommandations intelligentes (7 cols) -->
+          <div class="lg:col-span-7 glass-panel rounded-3xl p-5 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                  Recommandations Intelligentes
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-gold-400/15 text-gold-300 border border-gold-400/30">IA CURATED</span>
+                </h3>
+                <p class="text-xs text-slate-400">Cliquez sur une carte pour lancer instantanément la lecture</p>
+              </div>
+            </div>
+            <div id="smart-recommendations-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <!-- Injecté via JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- VUE 2 : LECTEUR PRINCIPAL & MODE IMMERSIF (NOW PLAYING)   -->
+      <!-- ========================================================= -->
+      <section id="view-player" class="view-section hidden p-4 sm:p-8 max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Colonne Gauche : Pochette, Visualiseur & Contrôles Principaux -->
+          <div class="lg:col-span-6 glass-panel rounded-3xl p-6 sm:p-8 flex flex-col items-center text-center relative overflow-hidden">
+            <!-- Halo dynamique arrière-plan -->
+            <div id="player-ambient-glow" class="absolute inset-0 opacity-30 pointer-events-none transition-all duration-700" style="background: radial-gradient(circle at 50% 35%, rgba(250,204,21,0.35), transparent 68%);"></div>
+
+            <!-- Badge Mode Immersif -->
+            <div class="w-full flex items-center justify-between mb-6 relative z-10">
+              <span class="text-xs font-mono uppercase tracking-widest text-gold-300 bg-gold-400/10 border border-gold-400/25 px-3 py-1 rounded-full">
+                Lecture Active • Audio Lossless IA
+              </span>
+              <button onclick="toggleLikeCurrent()" id="player-like-btn" class="p-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition" title="Ajouter aux favoris">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Pochette Haute Résolution Dynamique -->
+            <div id="player-artwork-wrapper" class="relative w-56 h-56 sm:w-72 sm:h-72 rounded-3xl p-1.5 bg-gradient-to-br from-gold-400 via-blue-500 to-amber-600 shadow-2xl mb-6 transition-all duration-500">
+              <div id="player-artwork" class="w-full h-full rounded-[20px] flex flex-col items-center justify-center relative overflow-hidden bg-midnight">
+                <!-- Artwork SVG généré dynamiquement -->
+              </div>
+            </div>
+
+            <!-- Titre & Artiste -->
+            <div class="space-y-1.5 mb-5 relative z-10 max-w-md">
+              <h2 id="player-title" class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Velours d'Abidjan</h2>
+              <p id="player-artist" class="text-sm sm:text-base text-gold-300 font-medium">AuraAI & Kévin K. • Nocturne Zouk</p>
+            </div>
+
+            <!-- Visualiseur Audio Temps Réel (Canvas) -->
+            <div class="w-full h-20 rounded-2xl bg-obsidian/70 border border-white/10 p-2 mb-6 relative z-10 overflow-hidden">
+              <canvas id="audio-visualizer" class="w-full h-full block"></canvas>
+            </div>
+
+            <!-- Barre de Progression Interactive -->
+            <div class="w-full space-y-2 mb-6 relative z-10">
+              <input
+                type="range"
+                id="player-progress"
+                min="0"
+                max="100"
+                value="0"
+                oninput="seekTrack(this.value)"
+                class="aura-slider w-full"
+              />
+              <div class="flex justify-between text-xs font-mono text-slate-400">
+                <span id="player-current-time">0:00</span>
+                <span id="player-remaining-time">-3:24</span>
+              </div>
+            </div>
+
+            <!-- Contrôles de Lecture Complets -->
+            <div class="flex items-center justify-center gap-4 sm:gap-6 mb-6 relative z-10">
+              <button onclick="toggleShuffle()" id="btn-shuffle" class="p-2.5 rounded-full text-slate-400 hover:text-white transition" title="Lecture aléatoire">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+                </svg>
+              </button>
+
+              <button onclick="prevTrack()" class="p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white transition" title="Précédent">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                </svg>
+              </button>
+
+              <button onclick="togglePlay()" id="player-play-btn" class="w-16 h-16 rounded-full gold-btn flex items-center justify-center shadow-xl" title="Lecture / Pause">
+                <svg id="player-play-icon" class="w-7 h-7 fill-current ml-0.5" viewBox="0 0 24 24">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              </button>
+
+              <button onclick="nextTrack()" class="p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white transition" title="Suivant">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                </svg>
+              </button>
+
+              <button onclick="toggleRepeat()" id="btn-repeat" class="p-2.5 rounded-full text-slate-400 hover:text-white transition" title="Répétition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Contrôle du Volume -->
+            <div class="w-full max-w-xs flex items-center gap-3 relative z-10">
+              <button onclick="toggleMute()" class="text-slate-400 hover:text-gold-400 transition">
+                <svg id="volume-icon" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" />
+                </svg>
+              </button>
+              <input type="range" id="volume-slider" min="0" max="100" value="80" oninput="setVolume(this.value)" class="aura-slider flex-1" />
+              <span id="volume-label" class="text-xs font-mono text-slate-400 w-9 text-right">80%</span>
+            </div>
+          </div>
+
+          <!-- Colonne Droite : Onglets Paroles Synchronisées & Analyse IA / Mixage -->
+          <div class="lg:col-span-6 glass-panel rounded-3xl p-6 sm:p-8 flex flex-col min-h-[580px]">
+            <!-- Sélecteur d'onglets -->
+            <div class="flex items-center gap-2 p-1.5 rounded-2xl bg-obsidian/80 border border-white/10 mb-6">
+              <button onclick="switchPlayerSubTab('lyrics')" id="subtab-btn-lyrics" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold bg-gold-400 text-obsidian transition">
+                🎤 Paroles Synchronisées
+              </button>
+              <button onclick="switchPlayerSubTab('ai-analysis')" id="subtab-btn-ai-analysis" class="flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition">
+                🎛️ Analyse IA & Mixage
+              </button>
+            </div>
+
+            <!-- Sous-onglet 1 : Paroles Synchronisées -->
+            <div id="subtab-lyrics" class="flex-1 flex flex-col justify-between space-y-5">
+              <div id="lyrics-container" class="space-y-3.5 max-h-[340px] overflow-y-auto pr-2 py-2">
+                <!-- Paroles dynamiques injectées via JS -->
+              </div>
+
+              <!-- Encart Traduction / Explication IA -->
+              <div class="rounded-2xl bg-deepblue/60 border border-gold-400/25 p-4 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-gold-300 flex items-center gap-1.5">
+                    ✨ Décryptage Poétique & Harmonique IA
+                  </span>
+                  <span class="text-[10px] font-mono text-slate-400">Temps réel</span>
+                </div>
+                <p id="lyrics-ai-insight" class="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                  L'arrangement associe une basse sub-harmonique chaude à des accords de piano électrique Rhodes en Fa mineur pour évoquer la douceur d'une nuit tropicale.
+                </p>
+              </div>
+            </div>
+
+            <!-- Sous-onglet 2 : Analyse IA & Mixage Direct -->
+            <div id="subtab-ai-analysis" class="hidden flex-1 flex flex-col justify-between space-y-6">
+              <!-- Métriques musicales -->
+              <div class="grid grid-cols-3 gap-3">
+                <div class="glass-card rounded-2xl p-4 text-center">
+                  <div class="text-xs text-slate-400 mb-1">Tempo</div>
+                  <div id="analysis-bpm" class="text-xl sm:text-2xl font-mono font-extrabold text-gold-400">104 BPM</div>
+                </div>
+                <div class="glass-card rounded-2xl p-4 text-center">
+                  <div class="text-xs text-slate-400 mb-1">Tonalité</div>
+                  <div id="analysis-key" class="text-xl sm:text-2xl font-mono font-extrabold text-white">Fm</div>
+                </div>
+                <div class="glass-card rounded-2xl p-4 text-center">
+                  <div class="text-xs text-slate-400 mb-1">Énergie</div>
+                  <div id="analysis-energy" class="text-xl sm:text-2xl font-mono font-extrabold text-emerald-400">78%</div>
+                </div>
+              </div>
+
+              <!-- Répartition spectrale & structure -->
+              <div class="glass-card rounded-2xl p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Empreinte Acoustique IA</span>
+                  <span id="analysis-genre-tag" class="text-xs font-mono text-gold-300">Zouk Love / Neo-R&B</span>
+                </div>
+                <div class="space-y-2 text-xs">
+                  <div>
+                    <div class="flex justify-between text-slate-300 mb-1"><span>Groove & Percussions</span><span id="stat-groove">84%</span></div>
+                    <div class="h-2 rounded-full bg-white/10 overflow-hidden"><div id="bar-groove" class="h-full bg-gold-400 rounded-full" style="width: 84%"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-slate-300 mb-1"><span>Chaleur Harmonique</span><span id="stat-warmth">91%</span></div>
+                    <div class="h-2 rounded-full bg-white/10 overflow-hidden"><div id="bar-warmth" class="h-full bg-blue-400 rounded-full" style="width: 91%"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-slate-300 mb-1"><span>Clarté Vocale / Mélodie</span><span id="stat-clarity">88%</span></div>
+                    <div class="h-2 rounded-full bg-white/10 overflow-hidden"><div id="bar-clarity" class="h-full bg-emerald-400 rounded-full" style="width: 88%"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Boutons d'actions IA en direct -->
+              <div class="space-y-2.5">
+                <div class="text-xs font-bold uppercase tracking-wider text-gold-300">Actions Studio IA en Direct</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button onclick="applyLiveAIAction('extend')" class="p-3.5 rounded-2xl bg-white/5 hover:bg-gold-400/15 border border-white/10 hover:border-gold-400/50 text-left transition group">
+                    <div class="text-sm font-bold text-white group-hover:text-gold-300">🔁 Étendre le beat (+60s)</div>
+                    <div class="text-[11px] text-slate-400">Génère une boucle instrumentale fluide</div>
+                  </button>
+                  <button onclick="applyLiveAIAction('vocals')" class="p-3.5 rounded-2xl bg-white/5 hover:bg-gold-400/15 border border-white/10 hover:border-gold-400/50 text-left transition group">
+                    <div class="text-sm font-bold text-white group-hover:text-gold-300">🎙️ Isoler les voix / Lead</div>
+                    <div class="text-[11px] text-slate-400">Filtre passe-bande sur les médiums</div>
+                  </button>
+                  <button onclick="applyLiveAIAction('transition')" class="p-3.5 rounded-2xl bg-white/5 hover:bg-gold-400/15 border border-white/10 hover:border-gold-400/50 text-left transition group">
+                    <div class="text-sm font-bold text-white group-hover:text-gold-300">🎚️ Transition DJ fluide</div>
+                    <div class="text-[11px] text-slate-400">Enchaîne harmoniquement au titre suivant</div>
+                  </button>
+                  <button onclick="applyLiveAIAction('remix')" class="p-3.5 rounded-2xl bg-white/5 hover:bg-gold-400/15 border border-white/10 hover:border-gold-400/50 text-left transition group">
+                    <div class="text-sm font-bold text-white group-hover:text-gold-300">✨ Générer un remix similaire</div>
+                    <div class="text-[11px] text-slate-400">Crée une variante IA instantanée</div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- VUE 3 : STUDIO & CO-PILOTE MUSICAL IA (AI DJ & GENERATOR) -->
+      <!-- ========================================================= -->
+      <section id="view-studio" class="view-section hidden p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <span class="text-xs font-mono uppercase tracking-widest text-gold-400">Générateur Neuronal & AI DJ</span>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Studio & Co-Pilote Musical IA</h1>
+            <p class="text-sm text-slate-300 mt-1">Décrivez une ambiance, un style musical ou discutez avec votre assistant DJ pour composer une playlist sur mesure.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Panneau de Génération par Prompt (7 colonnes) -->
+          <div class="lg:col-span-7 space-y-6">
+            <div class="glass-panel rounded-3xl p-6 space-y-5 border border-gold-400/20">
+              <div class="flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                  <span>🎹</span> Générateur de Playlist & Morceaux
+                </h2>
+                <span class="text-xs font-mono text-gold-300">Modèle Aura-Synth v4</span>
+              </div>
+
+              <!-- Zone de prompt -->
+              <div class="space-y-2">
+                <label class="text-xs font-semibold text-slate-300">Votre prompt créatif</label>
+                <textarea
+                  id="ai-prompt-input"
+                  rows="3"
+                  placeholder="Ex: R&B moderne avec rythme zouk doux, basse profonde, piano électrique chaleureux pour conduire de nuit..."
+                  class="w-full rounded-2xl bg-obsidian/80 border border-white/15 focus:border-gold-400 p-4 text-sm text-white placeholder-slate-500 outline-none transition resize-none"
+                >R&B moderne avec rythme zouk doux, basse chaude et nappes nocturnes</textarea>
+              </div>
+
+              <!-- Tags rapides d'humeur / instruments / tempo -->
+              <div class="space-y-3">
+                <div class="text-xs font-semibold text-slate-400">Tags rapides d'inspiration :</div>
+                <div class="flex flex-wrap gap-2" id="studio-tags">
+                  <button type="button" onclick="appendStudioTag('Zouk & Kompa doux')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-gold-400/20 border border-white/10 hover:border-gold-400/40 text-xs text-slate-200 transition">+ Zouk & Kompa doux</button>
+                  <button type="button" onclick="appendStudioTag('Afrobeats & Amapiano')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-gold-400/20 border border-white/10 hover:border-gold-400/40 text-xs text-slate-200 transition">+ Afrobeats & Amapiano</button>
+                  <button type="button" onclick="appendStudioTag('Piano Rhodes & Saxo')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-gold-400/20 border border-white/10 hover:border-gold-400/40 text-xs text-slate-200 transition">+ Piano Rhodes & Saxo</button>
+                  <button type="button" onclick="appendStudioTag('Synthwave 80s Nocturne')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-gold-400/20 border border-white/10 hover:border-gold-400/40 text-xs text-slate-200 transition">+ Synthwave Nocturne</button>
+                  <button type="button" onclick="appendStudioTag('Lo-Fi Focus 90 BPM')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-gold-400/20 border border-white/10 hover:border-gold-400/40 text-xs text-slate-200 transition">+ Lo-Fi Focus 90 BPM</button>
+                </div>
+              </div>
+
+              <!-- Curseur de tempo cible -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div class="bg-white/5 rounded-2xl p-3.5 border border-white/10">
+                  <div class="flex justify-between text-xs mb-2">
+                    <span class="text-slate-400">Tempo cible (BPM)</span>
+                    <span id="studio-bpm-val" class="font-mono font-bold text-gold-400">102 BPM</span>
+                  </div>
+                  <input type="range" min="75" max="140" value="102" oninput="document.getElementById('studio-bpm-val').textContent = this.value + ' BPM'" class="aura-slider w-full" />
+                </div>
+                <div class="bg-white/5 rounded-2xl p-3.5 border border-white/10">
+                  <div class="flex justify-between text-xs mb-2">
+                    <span class="text-slate-400">Intensité Émotionnelle</span>
+                    <span id="studio-mood-val" class="font-mono font-bold text-gold-400">Veloutée (75%)</span>
+                  </div>
+                  <input type="range" min="20" max="100" value="75" oninput="document.getElementById('studio-mood-val').textContent = 'Veloutée (' + this.value + '%)'" class="aura-slider w-full" />
+                </div>
+              </div>
+
+              <button onclick="generateAIPlaylist()" id="generate-ai-btn" class="w-full gold-btn py-3.5 px-6 rounded-2xl text-sm flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+                <span>Générer la Playlist Sur Mesure</span>
+              </button>
+            </div>
+
+            <!-- Résultat de la Génération IA -->
+            <div id="ai-generated-result" class="glass-panel rounded-3xl p-6 space-y-4 border border-gold-400/20">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span class="text-[11px] font-mono uppercase text-gold-400">Session Générée par AuraAI</span>
+                  <h3 id="gen-playlist-title" class="text-lg font-bold text-white">Mix Nocturne : Zouk & R&B Velours</h3>
+                </div>
+                <button onclick="playGeneratedPlaylist()" class="gold-btn px-4 py-2 rounded-full text-xs flex items-center gap-1.5 self-start sm:self-auto">
+                  <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Tout jouer maintenant
+                </button>
+              </div>
+              <p id="gen-playlist-rationale" class="text-xs text-slate-300 bg-deepblue/50 border border-white/10 rounded-xl p-3.5 leading-relaxed">
+                💡 <strong>Choix de l'IA :</strong> Progression harmonique douce démarrant à 98 BPM pour installer une atmosphère feutrée, montant progressivement vers 106 BPM avec des percussions syncopées et des nappes analogiques chaudes.
+              </p>
+              <div id="gen-playlist-tracks" class="space-y-2">
+                <!-- Pistes générées injectées via JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Assistant Chat Co-Pilote IA (5 colonnes) -->
+          <div class="lg:col-span-5 glass-panel rounded-3xl p-6 flex flex-col h-[640px] border border-white/10">
+            <div class="flex items-center justify-between pb-4 border-b border-white/10">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gold-400/15 border border-gold-400/40 flex items-center justify-center text-gold-400 font-bold">
+                  AI
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-white">Co-Pilote DJ Aura</h3>
+                  <span class="text-[11px] text-emerald-400 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> En ligne • Prêt à mixer
+                  </span>
+                </div>
+              </div>
+              <button onclick="clearAIChat()" class="text-xs text-slate-400 hover:text-white">Effacer</button>
+            </div>
+
+            <!-- Messages du Chat -->
+            <div id="ai-chat-messages" class="flex-1 overflow-y-auto py-4 space-y-3.5 pr-1">
+              <div class="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm p-3.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
+                Bonjour ! Je suis <strong>Aura</strong>, votre co-pilote musical. Demandez-moi d'analyser le morceau en cours, de créer une file d'attente pour travailler, ou de trouver une transition parfaite !
+              </div>
+            </div>
+
+            <!-- Suggestions rapides de chat -->
+            <div class="flex gap-2 overflow-x-auto pb-2.5">
+              <button onclick="sendQuickChat('Analyse le morceau actuel')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-gold-300 whitespace-nowrap">
+                🔍 Analyser le titre actuel
+              </button>
+              <button onclick="sendQuickChat('Crée une file d\'attente Chill & Focus')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-gold-300 whitespace-nowrap">
+                🎧 File d'attente Focus
+              </button>
+              <button onclick="sendQuickChat('Recommande un titre Zouk R&B')" class="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-gold-300 whitespace-nowrap">
+                🌙 Titre Zouk R&B
+              </button>
+            </div>
+
+            <!-- Formulaire d'envoi -->
+            <form onsubmit="handleChatSubmit(event)" class="flex items-center gap-2 pt-2 border-t border-white/10">
+              <input
+                type="text"
+                id="ai-chat-input"
+                placeholder="Demandez à AuraAI..."
+                class="flex-1 bg-obsidian/80 border border-white/15 focus:border-gold-400 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 outline-none"
+              />
+              <button type="submit" class="gold-btn p-2.5 rounded-xl" title="Envoyer">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- VUE 4 : BIBLIOTHÈQUE & PLAYLISTS (LIBRARY)                -->
+      <!-- ========================================================= -->
+      <section id="view-library" class="view-section hidden p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white">Bibliothèque & Playlists</h1>
+            <p class="text-xs sm:text-sm text-slate-400 mt-1">Explorez votre catalogue haute fidélité avec métadonnées harmoniques IA</p>
+          </div>
+
+          <!-- Onglets Bibliothèque -->
+          <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10 self-start">
+            <button onclick="switchLibraryTab('all', this)" class="lib-tab px-3.5 py-2 rounded-xl text-xs font-bold bg-gold-400 text-obsidian transition">Toutes les pistes</button>
+            <button onclick="switchLibraryTab('liked', this)" class="lib-tab px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition">Titres Likés ❤️</button>
+            <button onclick="switchLibraryTab('playlists', this)" class="lib-tab px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition">Playlists</button>
+            <button onclick="switchLibraryTab('artists', this)" class="lib-tab px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition">Artistes</button>
+          </div>
+        </div>
+
+        <!-- Barre de recherche et filtres Genre / BPM -->
+        <div class="glass-panel rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          <div class="relative flex-1">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" stroke-linecap="round" />
+            </svg>
+            <input
+              type="text"
+              id="library-search-input"
+              oninput="renderLibrary()"
+              placeholder="Filtrer par titre, artiste, tonalité (ex: Fm)..."
+              class="w-full bg-obsidian/70 border border-white/10 focus:border-gold-400 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm text-white placeholder-slate-500 outline-none"
+            />
+          </div>
+
+          <select id="library-genre-filter" onchange="renderLibrary()" class="bg-obsidian/80 border border-white/10 focus:border-gold-400 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white outline-none">
+            <option value="all">Tous les genres</option>
+            <option value="Zouk & R&B">Zouk & R&B</option>
+            <option value="Focus & Ambient">Focus & Ambient</option>
+            <option value="Énergie Studio">Énergie Studio</option>
+            <option value="Chill & Synthwave">Chill & Synthwave</option>
+          </select>
+
+          <select id="library-bpm-filter" onchange="renderLibrary()" class="bg-obsidian/80 border border-white/10 focus:border-gold-400 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white outline-none">
+            <option value="all">Tous les BPM</option>
+            <option value="slow">Lent (&lt; 100 BPM)</option>
+            <option value="mid">Modéré (100 - 115 BPM)</option>
+            <option value="fast">Énergique (&gt; 115 BPM)</option>
+          </select>
+        </div>
+
+        <!-- Contenu dynamique de la bibliothèque -->
+        <div id="library-content-area" class="glass-panel rounded-3xl overflow-hidden border border-white/10">
+          <!-- Injecté via JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- VUE 5 : ÉGALISEUR & PARAMÈTRES AUDIO (EQUALIZER & SETTINGS)-->
+      <!-- ========================================================= -->
+      <section id="view-equalizer" class="view-section hidden p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
+        <div>
+          <span class="text-xs font-mono uppercase tracking-widest text-gold-400">DSP & Acoustique Temps Réel</span>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Égaliseur 7 Bandes & Audio Spatial</h1>
+          <p class="text-xs sm:text-sm text-slate-400 mt-1">Ajustez la courbe fréquentielle du synthétiseur Web Audio en direct et activez les traitements IA.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Égaliseur Graphique 7 Bandes (7 cols) -->
+          <div class="lg:col-span-7 glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <h2 class="text-lg font-bold text-white">Égaliseur Graphique</h2>
+              <!-- Préréglages -->
+              <div class="flex flex-wrap gap-1.5" id="eq-presets">
+                <button onclick="applyEQPreset('flat', this)" class="eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-gold-400 text-obsidian transition">Plat</button>
+                <button onclick="applyEQPreset('bass', this)" class="eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition">Bass Boost</button>
+                <button onclick="applyEQPreset('zouk', this)" class="eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition">R&B / Zouk</button>
+                <button onclick="applyEQPreset('studio', this)" class="eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition">Studio IA</button>
+                <button onclick="applyEQPreset('vocal', this)" class="eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition">Vocal</button>
+              </div>
+            </div>
+
+            <!-- 7 Bandes de Fréquences -->
+            <div class="grid grid-cols-7 gap-2 pt-4 pb-2 bg-obsidian/60 rounded-2xl p-4 border border-white/10" id="eq-bands-container">
+              <!-- Injecté via JS -->
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Plage dynamique : -12 dB à +12 dB</span>
+              <button onclick="applyEQPreset('flat')" class="text-gold-400 hover:underline font-semibold">Réinitialiser à 0 dB</button>
+            </div>
+          </div>
+
+          <!-- Options Audio IA (5 cols) -->
+          <div class="lg:col-span-5 glass-panel rounded-3xl p-6 sm:p-8 space-y-5">
+            <h2 class="text-lg font-bold text-white">Traitements Neuronal Audio</h2>
+
+            <!-- Option 1 : Auto-Crossfade -->
+            <div class="glass-card rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div>
+                <div class="text-sm font-bold text-white">Fondu Enchaîné Intelligent</div>
+                <p class="text-xs text-slate-400 mt-0.5">Synchronise le tempo et enchaîne les pistes sans silence (4s).</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                <input type="checkbox" id="opt-crossfade" checked onchange="toggleAudioSetting('crossfade', this.checked)" class="sr-only peer" />
+                <div class="w-11 h-6 bg-white/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-400"></div>
+              </label>
+            </div>
+
+            <!-- Option 2 : Normalisation du volume -->
+            <div class="glass-card rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div>
+                <div class="text-sm font-bold text-white">Normalisation IA (LUFS)</div>
+                <p class="text-xs text-slate-400 mt-0.5">Maintient un niveau sonore constant (-14 LUFS) entre chaque piste.</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                <input type="checkbox" id="opt-normalize" checked onchange="toggleAudioSetting('normalize', this.checked)" class="sr-only peer" />
+                <div class="w-11 h-6 bg-white/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-400"></div>
+              </label>
+            </div>
+
+            <!-- Option 3 : Spatial Audio 3D -->
+            <div class="glass-card rounded-2xl p-4 flex items-center justify-between gap-4">
+              <div>
+                <div class="text-sm font-bold text-white flex items-center gap-2">
+                  Spatial Audio 3D
+                  <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gold-400/20 text-gold-300">BINAURAL</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-0.5">Élargit la scène stéréo avec réverbération psychoacoustique.</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                <input type="checkbox" id="opt-spatial" onchange="toggleAudioSetting('spatial', this.checked)" class="sr-only peer" />
+                <div class="w-11 h-6 bg-white/15 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-400"></div>
+              </label>
+            </div>
+
+            <!-- Moniteur de sortie DSP -->
+            <div class="rounded-2xl bg-obsidian/80 border border-white/10 p-4 space-y-2">
+              <div class="flex justify-between text-xs font-mono">
+                <span class="text-slate-400">Statut Web Audio API</span>
+                <span id="dsp-status-text" class="text-emerald-400 font-bold">Prêt (Cliquez Play)</span>
+              </div>
+              <div class="flex justify-between text-xs font-mono">
+                <span class="text-slate-400">Échantillonnage</span>
+                <span class="text-white">48000 Hz • Stéréo</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MINI-PLAYER PERSISTANT EN BAS DE L'ÉCRAN                 -->
+  <!-- ========================================================= -->
+  <div id="mini-player" class="fixed bottom-16 md:bottom-0 left-0 md:left-72 lg:left-80 right-0 z-30 glass-panel border-t border-gold-400/25 px-4 sm:px-6 py-2.5 sm:py-3">
+    <!-- Barre de progression fine tout en haut du mini-player -->
+    <div class="absolute top-0 left-0 right-0 h-1 bg-white/10 cursor-pointer" onclick="seekFromMiniBar(event)">
+      <div id="mini-progress-bar" class="h-full bg-gradient-to-r from-gold-400 to-amber-500 transition-all duration-150" style="width: 0%"></div>
+    </div>
+
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-6">
+      <!-- Infos piste en cours (clic ouvre vue lecteur immersif) -->
+      <div onclick="switchView('player')" class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group">
+        <div id="mini-artwork" class="w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden shrink-0 border border-gold-400/30 bg-midnight flex items-center justify-center">
+          <!-- Miniature SVG -->
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h4 id="mini-title" class="text-xs sm:text-sm font-bold text-white truncate group-hover:text-gold-400 transition">Velours d'Abidjan</h4>
+            <span id="mini-bpm-badge" class="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-gold-300">104 BPM</span>
+          </div>
+          <p id="mini-artist" class="text-[11px] sm:text-xs text-slate-400 truncate">AuraAI & Kévin K.</p>
+        </div>
+      </div>
+
+      <!-- Contrôles centraux -->
+      <div class="flex items-center gap-2 sm:gap-4">
+        <button onclick="prevTrack()" class="p-2 text-slate-300 hover:text-white transition" title="Précédent">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+
+        <button onclick="togglePlay()" id="mini-play-btn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-full gold-btn flex items-center justify-center" title="Lecture / Pause">
+          <svg id="mini-play-icon" class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+
+        <button onclick="nextTrack()" class="p-2 text-slate-300 hover:text-white transition" title="Suivant">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+      </div>
+
+      <!-- Temps, Volume & Bouton Agrandir -->
+      <div class="hidden sm:flex items-center justify-end gap-4 flex-1">
+        <span id="mini-time" class="text-xs font-mono text-slate-400">0:00 / 3:24</span>
+
+        <div class="hidden lg:flex items-center gap-2 w-28">
+          <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07" />
+          </svg>
+          <input type="range" id="mini-volume-slider" min="0" max="100" value="80" oninput="setVolume(this.value)" class="aura-slider w-full" />
+        </div>
+
+        <button onclick="switchView('player')" class="p-2 rounded-xl bg-white/5 hover:bg-gold-400/20 border border-white/10 text-gold-300 transition" title="Mode Immersif Plein Écran">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- BARRE DE NAVIGATION INFÉRIEURE (MOBILE)                   -->
+  <!-- ========================================================= -->
+  <nav id="mobile-nav" class="md:hidden fixed bottom-0 inset-x-0 z-40 glass-panel border-t border-white/10 h-16 px-2 flex items-center justify-around">
+    <button data-view="home" onclick="switchView('home')" class="mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-gold-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+      <span class="text-[10px] font-semibold">Accueil</span>
+    </button>
+
+    <button data-view="player" onclick="switchView('player')" class="mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-slate-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" />
+      </svg>
+      <span class="text-[10px] font-semibold">Lecteur</span>
+    </button>
+
+    <button data-view="studio" onclick="switchView('studio')" class="mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-slate-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+      </svg>
+      <span class="text-[10px] font-semibold">Studio IA</span>
+    </button>
+
+    <button data-view="library" onclick="switchView('library')" class="mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-slate-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+      <span class="text-[10px] font-semibold">Biblio</span>
+    </button>
+
+    <button data-view="equalizer" onclick="switchView('equalizer')" class="mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-slate-400">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+      <span class="text-[10px] font-semibold">Audio 3D</span>
+    </button>
+  </nav>
+
+  <!-- ========================================================= -->
+  <!-- LOGIQUE APPLICATIVE & SYNTHÉTISEUR WEB AUDIO API          -->
+  <!-- ========================================================= -->
+  <script>
+    // =========================================================================
+    // 1. CATALOGUE MUSICAL RICHE AVEC PARAMÈTRES DE SYNTHÈSE AUDIO PROCÉDURALE
+    // =========================================================================
+    const TRACKS = [
+      {
+        id: 1,
+        title: "Velours d'Abidjan",
+        artist: "AuraAI & Kévin K.",
+        album: "Nocturne Tropicale",
+        genre: "Zouk & R&B",
+        mood: "zouk",
+        bpm: 104,
+        musicalKey: "Fm",
+        energy: 78,
+        duration: 204,
+        liked: true,
+        colors: ["#D4AF37", "#1E3A8A", "#090D16"],
+        synthProfile: {
+          scale: [174.61, 207.65, 261.63, 311.13, 349.23, 415.30], // Fm7 / Fm9
+          bassFreqs: [87.31, 65.41, 77.78, 69.30],
+          waveType: "triangle",
+          rhythmPattern: [1, 0, 0.5, 1, 0, 0.7, 1, 0.4],
+          groove: 86,
+          warmth: 92,
+          clarity: 88
+        },
+        aiInsight: "Rythmique zouk syncopée à 104 BPM soutenue par une basse sub-harmonique en Fa mineur et des nappes Rhodes veloutées.",
+        lyrics: [
+          { time: 0, text: "Sous les lumières dorées de la lagune ce soir..." },
+          { time: 18, text: "Le rythme ralentit, nos pensées s'envolent dans le noir" },
+          { time: 38, text: "Chaque pulsation résonne comme un écho d'or et de bleu" },
+          { time: 60, text: "Laisse la fréquence guider nos pas, loin du bruit silencieux" },
+          { time: 85, text: "Dans l'aura de la nuit, tout devient fluide et précieux" },
+          { time: 115, text: "Harmonie suspendue entre deux battements de cœur" },
+          { time: 150, text: "Encore une danse sous les étoiles de minuit..." }
+        ]
+      },
+      {
+        id: 2,
+        title: "Horizons Dorés (Neural Flow)",
+        artist: "AuraAI SoundLab",
+        album: "Deep Focus Architecture",
+        genre: "Focus & Ambient",
+        mood: "focus",
+        bpm: 92,
+        musicalKey: "Cm",
+        energy: 54,
+        duration: 228,
+        liked: true,
+        colors: ["#FACC15", "#0F172A", "#1D4ED8"],
+        synthProfile: {
+          scale: [261.63, 311.13, 392.00, 466.16, 523.25], // Cm9
+          bassFreqs: [65.41, 77.78, 58.27, 65.41],
+          waveType: "sine",
+          rhythmPattern: [1, 0, 0, 0.4, 0.8, 0, 0.3, 0],
+          groove: 68,
+          warmth: 95,
+          clarity: 94
+        },
+        aiInsight: "Ondes alpha calibrées à 92 BPM avec accords de neuvième mineure favorisant la concentration profonde sans fatigue auditive.",
+        lyrics: [
+          { time: 0, text: "[Séquence harmonique générative — Calibration Focus]" },
+          { time: 25, text: "Respire au rythme des nappes cristallines en Do mineur" },
+          { time: 55, text: "L'esprit s'éclaircit, chaque idée trouve sa trajectoire" },
+          { time: 95, text: "Stabilité acoustique • Flux neuronal continu" },
+          { time: 140, text: "Élévation douce vers un état de créativité pure" }
+        ]
+      },
+      {
+        id: 3,
+        title: "Nébuleuse Synthétique",
+        artist: "Léna V. & AuraAI",
+        album: "Midnight Drive 2084",
+        genre: "Chill & Synthwave",
+        mood: "chill",
+        bpm: 110,
+        musicalKey: "Am",
+        energy: 72,
+        duration: 196,
+        liked: false,
+        colors: ["#F59E0B", "#312E81", "#06070B"],
+        synthProfile: {
+          scale: [220.00, 261.63, 329.63, 392.00, 493.88], // Am9
+          bassFreqs: [110.00, 87.31, 98.00, 82.41],
+          waveType: "sawtooth",
+          rhythmPattern: [1, 0.4, 0.8, 0.4, 1, 0.4, 0.8, 0.6],
+          groove: 82,
+          warmth: 85,
+          clarity: 90
+        },
+        aiInsight: "Arpèges analogiques rétro-futuristes en La mineur combinés à une réverbération spatiale large.",
+        lyrics: [
+          { time: 0, text: "Horizon électrique sur l'autoroute de minuit" },
+          { time: 22, text: "Les reflets d'or dansent sur le capot mouillé" },
+          { time: 48, text: "On traverse le temps porté par le synthétiseur" },
+          { time: 80, text: "Aucune destination, juste l'instant présent" },
+          { time: 120, text: "Échos analogiques jusqu'aux premières lueurs de l'aube" }
+        ]
+      },
+      {
+        id: 4,
+        title: "Impulsion Studio 808",
+        artist: "Mael Beats x AuraAI",
+        album: "Gold Standard Sessions",
+        genre: "Énergie Studio",
+        mood: "studio",
+        bpm: 124,
+        musicalKey: "Gm",
+        energy: 91,
+        duration: 185,
+        liked: true,
+        colors: ["#EAB308", "#1E1B4B", "#090D16"],
+        synthProfile: {
+          scale: [196.00, 233.08, 293.66, 349.23, 440.00], // Gm9
+          bassFreqs: [98.00, 73.42, 87.31, 65.41],
+          waveType: "square",
+          rhythmPattern: [1, 0.6, 1, 0.8, 1, 0.5, 1, 0.9],
+          groove: 96,
+          warmth: 80,
+          clarity: 87
+        },
+        aiInsight: "Signature rythmique percussive haute énergie à 124 BPM conçue pour stimuler la motivation et le mouvement.",
+        lyrics: [
+          { time: 0, text: "Montée en pression dans le studio, le signal est au vert" },
+          { time: 20, text: "Basse 808 calibrée, précision chirurgicale" },
+          { time: 45, text: "On repousse les limites du son, fréquence après fréquence" },
+          { time: 75, text: "Énergie maximale • Dynamique dorée" },
+          { time: 115, text: "Le final éclate dans une cascade harmonique" }
+        ]
+      },
+      {
+        id: 5,
+        title: "Étoile de Minuit (Zouk Love IA)",
+        artist: "Sora & AuraAI",
+        album: "Nuits d'Ébène",
+        genre: "Zouk & R&B",
+        mood: "zouk",
+        bpm: 98,
+        musicalKey: "Dm",
+        energy: 69,
+        duration: 215,
+        liked: false,
+        colors: ["#FDE68A", "#1E3A8A", "#06070B"],
+        synthProfile: {
+          scale: [293.66, 349.23, 440.00, 523.25, 659.25], // Dm9
+          bassFreqs: [73.42, 87.31, 65.41, 55.00],
+          waveType: "triangle",
+          rhythmPattern: [1, 0, 0.6, 1, 0, 0.6, 1, 0.3],
+          groove: 88,
+          warmth: 96,
+          clarity: 91
+        },
+        aiInsight: "Ballade Zouk-R&B intime à 98 BPM mettant en valeur des harmonies vocales chaudes et un groove chaloupé.",
+        lyrics: [
+          { time: 0, text: "Quand la ville s'endort, ta voix reste en lumière" },
+          { time: 24, text: "Un pas à deux sur la cadence douce de l'océan" },
+          { time: 52, text: "Nos silences parlent plus fort que tous les discours" },
+          { time: 88, text: "Sous cette étoile d'or, le temps s'arrête pour nous" },
+          { time: 130, text: "Douceur infinie jusqu'au lever du jour..." }
+        ]
+      },
+      {
+        id: 6,
+        title: "Onde Solaire & Café",
+        artist: "AuraAI Morning",
+        album: "Clarté Matinale",
+        genre: "Focus & Ambient",
+        mood: "focus",
+        bpm: 96,
+        musicalKey: "Fmaj7",
+        energy: 62,
+        duration: 192,
+        liked: false,
+        colors: ["#FACC15", "#0C4A6E", "#06070B"],
+        synthProfile: {
+          scale: [349.23, 440.00, 523.25, 659.25, 783.99], // Fmaj9
+          bassFreqs: [87.31, 110.00, 65.41, 98.00],
+          waveType: "sine",
+          rhythmPattern: [1, 0.2, 0.5, 0.2, 0.9, 0.2, 0.6, 0.3],
+          groove: 74,
+          warmth: 93,
+          clarity: 95
+        },
+        aiInsight: "Accords majeurs lumineux (Fmaj9) favorisant une humeur positive et une clarté mentale immédiate.",
+        lyrics: [
+          { time: 0, text: "Premiers rayons dorés à travers la fenêtre" },
+          { time: 28, text: "Une mélodie légère accompagne le réveil des sens" },
+          { time: 65, text: "Équilibre parfait entre calme et élan créatif" },
+          { time: 110, text: "Chaque note éclaire la journée qui commence" }
+        ]
+      }
+    ];
+
+    const AI_MOOD_PRESETS = [
+      {
+        id: "focus",
+        title: "Mix Focus & Flow",
+        subtitle: "Concentration profonde & ondes alpha",
+        bpmRange: "90 - 98 BPM",
+        trackIndex: 1,
+        accent: "from-blue-600/30 to-gold-400/20",
+        badge: "IA NEURAL FOCUS"
+      },
+      {
+        id: "zouk",
+        title: "Zouk & R&B Nocturne",
+        subtitle: "Groove velouté & basses chaleureuses",
+        bpmRange: "98 - 106 BPM",
+        trackIndex: 0,
+        accent: "from-amber-500/30 to-blue-900/40",
+        badge: "TENDANCE SOIRÉE"
+      },
+      {
+        id: "studio",
+        title: "Énergie Studio",
+        subtitle: "Percussions 808 & dynamique haute",
+        bpmRange: "120 - 128 BPM",
+        trackIndex: 3,
+        accent: "from-yellow-500/30 to-indigo-950/60",
+        badge: "HIGH ENERGY"
+      },
+      {
+        id: "chill",
+        title: "Chill & Synthwave",
+        subtitle: "Nappes analogiques & évasion nocturne",
+        bpmRange: "105 - 114 BPM",
+        trackIndex: 2,
+        accent: "from-indigo-600/30 to-amber-500/20",
+        badge: "SPATIAL 3D"
+      }
+    ];
+
+    // =========================================================================
+    // 2. ÉTAT GLOBAL DE L'APPLICATION
+    // =========================================================================
+    const state = {
+      currentView: "home",
+      currentTrackIndex: 0,
+      isPlaying: false,
+      currentTime: 0,
+      volume: 0.8,
+      isMuted: false,
+      shuffle: false,
+      repeat: false,
+      libraryTab: "all",
+      homeMoodFilter: "all",
+      eqGains: [0, 0, 0, 0, 0, 0, 0], // 60Hz, 170Hz, 350Hz, 1kHz, 3kHz, 6kHz, 12kHz
+      audioSettings: {
+        crossfade: true,
+        normalize: true,
+        spatial: false
+      },
+      generatedPlaylistIndices: [0, 4, 1, 2]
+    };
+
+    // =========================================================================
+    // 3. MOTEUR AUDIO PROCÉDURAL WEB AUDIO API (SYNTHÉTISEUR + EQ 7 BANDES)
+    // =========================================================================
+    let audioCtx = null;
+    let masterGain = null;
+    let analyser = null;
+    let eqFilters = [];
+    let stereoPanner = null;
+    let synthInterval = null;
+    let progressInterval = null;
+    let stepCounter = 0;
+
+    const EQ_FREQUENCIES = [60, 170, 350, 1000, 3000, 6000, 12000];
+    const EQ_LABELS = ["60Hz", "170Hz", "350Hz", "1kHz", "3kHz", "6kHz", "12kHz"];
+
+    function initAudioEngine() {
+      if (audioCtx) {
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+        return;
+      }
+
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContextClass();
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = state.isMuted ? 0 : state.volume * 0.45;
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.82;
+
+      stereoPanner = audioCtx.createStereoPanner();
+      stereoPanner.pan.value = 0;
+
+      // Création de la chaîne d'égaliseur 7 bandes
+      eqFilters = EQ_FREQUENCIES.map((freq, idx) => {
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = idx === 0 ? "lowshelf" : idx === EQ_FREQUENCIES.length - 1 ? "highshelf" : "peaking";
+        filter.frequency.value = freq;
+        filter.Q.value = 1.2;
+        filter.gain.value = state.eqGains[idx];
+        return filter;
+      });
+
+      // Connexion en série : eq[0] -> eq[1] -> ... -> stereoPanner -> masterGain -> analyser -> destination
+      for (let i = 0; i < eqFilters.length - 1; i++) {
+        eqFilters[i].connect(eqFilters[i + 1]);
+      }
+      eqFilters[eqFilters.length - 1].connect(stereoPanner);
+      stereoPanner.connect(masterGain);
+      masterGain.connect(analyser);
+      analyser.connect(audioCtx.destination);
+
+      const dspText = document.getElementById("dsp-status-text");
+      if (dspText) dspText.textContent = "Actif (48kHz DSP)";
+    }
+
+    function playSynthStep() {
+      if (!audioCtx || !state.isPlaying) return;
+
+      const track = TRACKS[state.currentTrackIndex];
+      const profile = track.synthProfile;
+      const now = audioCtx.currentTime;
+      const step = stepCounter % 8;
+      const velocity = profile.rhythmPattern[step];
+
+      // Effet Spatial Audio 3D subtil (panoramique lent)
+      if (state.audioSettings.spatial && stereoPanner) {
+        stereoPanner.pan.setValueAtTime(Math.sin(stepCounter * 0.25) * 0.45, now);
+      } else if (stereoPanner) {
+        stereoPanner.pan.setValueAtTime(0, now);
+      }
+
+      // 1. Kick / Pulsation basse sur les temps forts
+      if (step === 0 || step === 4 || (track.mood === "zouk" && step === 3)) {
+        const kickOsc = audioCtx.createOscillator();
+        const kickGain = audioCtx.createGain();
+        kickOsc.type = "sine";
+        kickOsc.frequency.setValueAtTime(125, now);
+        kickOsc.frequency.exponentialRampToValueAtTime(42, now + 0.16);
+
+        kickGain.gain.setValueAtTime(0.42, now);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+        kickOsc.connect(kickGain);
+        kickGain.connect(eqFilters[0]);
+        kickOsc.start(now);
+        kickOsc.stop(now + 0.25);
+      }
+
+      // 2. Ligne de Basse harmonique
+      if (velocity > 0) {
+        const barIndex = Math.floor(stepCounter / 8) % profile.bassFreqs.length;
+        const bassFreq = profile.bassFreqs[barIndex];
+        const bassOsc = audioCtx.createOscillator();
+        const bassFilter = audioCtx.createBiquadFilter();
+        const bassGain = audioCtx.createGain();
+
+        bassOsc.type = "triangle";
+        bassOsc.frequency.setValueAtTime(bassFreq, now);
+
+        bassFilter.type = "lowpass";
+        bassFilter.frequency.setValueAtTime(360, now);
+
+        bassGain.gain.setValueAtTime(0.24 * velocity, now);
+        bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+
+        bassOsc.connect(bassFilter);
+        bassFilter.connect(bassGain);
+        bassGain.connect(eqFilters[0]);
+
+        bassOsc.start(now);
+        bassOsc.stop(now + 0.34);
+      }
+
+      // 3. Accord / Mélodie cristalline IA
+      if (step % 2 === 0 || velocity >= 0.7) {
+        const noteIdx = (stepCounter + Math.floor(stepCounter / 4)) % profile.scale.length;
+        const freq = profile.scale[noteIdx];
+
+        const leadOsc = audioCtx.createOscillator();
+        const leadGain = audioCtx.createGain();
+        const leadFilter = audioCtx.createBiquadFilter();
+
+        leadOsc.type = profile.waveType;
+        leadOsc.frequency.setValueAtTime(freq, now);
+
+        leadFilter.type = "lowpass";
+        leadFilter.frequency.setValueAtTime(1800, now);
+
+        const amp = (track.mood === "focus" ? 0.11 : 0.14) * (velocity || 0.5);
+        leadGain.gain.setValueAtTime(0.001, now);
+        leadGain.gain.linearRampToValueAtTime(amp, now + 0.04);
+        leadGain.gain.exponentialRampToValueAtTime(0.0008, now + 0.55);
+
+        leadOsc.connect(leadFilter);
+        leadFilter.connect(leadGain);
+        leadGain.connect(eqFilters[0]);
+
+        leadOsc.start(now);
+        leadOsc.stop(now + 0.58);
+      }
+
+      // 4. Percussion légère (Hi-hat / Rimshot)
+      if (step % 2 === 1) {
+        const bufferSize = audioCtx.sampleRate * 0.04;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        const whiteNoise = audioCtx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+
+        const hpFilter = audioCtx.createBiquadFilter();
+        hpFilter.type = "highpass";
+        hpFilter.frequency.value = 6500;
+
+        const hatGain = audioCtx.createGain();
+        hatGain.gain.setValueAtTime(0.045, now);
+        hatGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+        whiteNoise.connect(hpFilter);
+        hpFilter.connect(hatGain);
+        hatGain.connect(eqFilters[0]);
+        whiteNoise.start(now);
+      }
+
+      stepCounter++;
+    }
+
+    function startSynthLoop() {
+      stopSynthLoop();
+      const track = TRACKS[state.currentTrackIndex];
+      // Chaque step correspond à une double-croche (16th note)
+      const stepDurationMs = (60 / track.bpm / 2) * 1000;
+      playSynthStep();
+      synthInterval = setInterval(playSynthStep, stepDurationMs);
+    }
+
+    function stopSynthLoop() {
+      if (synthInterval) {
+        clearInterval(synthInterval);
+        synthInterval = null;
+      }
+    }
+
+    // =========================================================================
+    // 4. CONTRÔLES DU LECTEUR & SYNCHRONISATION DES VUES
+    // =========================================================================
+    function formatTime(seconds) {
+      const s = Math.max(0, Math.floor(seconds));
+      const mins = Math.floor(s / 60);
+      const secs = s % 60;
+      return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+    }
+
+    function generateArtworkSVG(track, large = false) {
+      const [c1, c2, c3] = track.colors;
+      return `
+        <svg viewBox="0 0 200 200" class="w-full h-full object-cover">
+          <defs>
+            <linearGradient id="grad-${track.id}-${large ? 'L' : 'S'}" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="${c2}" />
+              <stop offset="55%" stop-color="${c3}" />
+              <stop offset="100%" stop-color="${c1}" stop-opacity="0.75" />
+            </linearGradient>
+            <radialGradient id="orb-${track.id}-${large ? 'L' : 'S'}" cx="35%" cy="30%" r="60%">
+              <stop offset="0%" stop-color="${c1}" stop-opacity="0.85" />
+              <stop offset="100%" stop-color="${c1}" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="200" height="200" fill="url(#grad-${track.id}-${large ? 'L' : 'S'})" />
+          <circle cx="70" cy="65" r="75" fill="url(#orb-${track.id}-${large ? 'L' : 'S'})" />
+          <circle cx="100" cy="100" r="54" fill="none" stroke="${c1}" stroke-width="1.2" stroke-opacity="0.45" stroke-dasharray="6 4" />
+          <circle cx="100" cy="100" r="34" fill="none" stroke="#FFFFFF" stroke-width="0.8" stroke-opacity="0.25" />
+          <path d="M55 100 Q 78 65, 100 100 T 145 100" fill="none" stroke="${c1}" stroke-width="3" stroke-linecap="round" />
+          <path d="M65 112 Q 85 85, 100 112 T 135 112" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.7" stroke-linecap="round" />
+        </svg>
+      `;
+    }
+
+    function loadTrack(index, autoPlay = true) {
+      state.currentTrackIndex = (index + TRACKS.length) % TRACKS.length;
+      state.currentTime = 0;
+      stepCounter = 0;
+
+      const track = TRACKS[state.currentTrackIndex];
+      updatePlayerUI();
+
+      if (autoPlay) {
+        initAudioEngine();
+        state.isPlaying = true;
+        startSynthLoop();
+        startProgressTimer();
+      }
+      updatePlayButtonsUI();
+      renderHomeLists();
+      renderLibrary();
+    }
+
+    function playTrackByIndex(index) {
+      loadTrack(index, true);
+      showToast(`Lecture : ${TRACKS[index].title}`, "Synthèse IA active");
+    }
+
+    function togglePlay() {
+      initAudioEngine();
+      state.isPlaying = !state.isPlaying;
+
+      if (state.isPlaying) {
+        startSynthLoop();
+        startProgressTimer();
+      } else {
+        stopSynthLoop();
+        stopProgressTimer();
+      }
+      updatePlayButtonsUI();
+    }
+
+    function nextTrack() {
+      if (state.shuffle) {
+        let nextIdx = Math.floor(Math.random() * TRACKS.length);
+        if (nextIdx === state.currentTrackIndex && TRACKS.length > 1) {
+          nextIdx = (nextIdx + 1) % TRACKS.length;
+        }
+        loadTrack(nextIdx, true);
+      } else {
+        loadTrack(state.currentTrackIndex + 1, true);
+      }
+    }
+
+    function prevTrack() {
+      if (state.currentTime > 4) {
+        state.currentTime = 0;
+        updateProgressUI();
+      } else {
+        loadTrack(state.currentTrackIndex - 1, true);
+      }
+    }
+
+    function toggleShuffle() {
+      state.shuffle = !state.shuffle;
+      const btn = document.getElementById("btn-shuffle");
+      btn.classList.toggle("text-gold-400", state.shuffle);
+      btn.classList.toggle("text-slate-400", !state.shuffle);
+      showToast(state.shuffle ? "Lecture aléatoire activée" : "Lecture aléatoire désactivée");
+    }
+
+    function toggleRepeat() {
+      state.repeat = !state.repeat;
+      const btn = document.getElementById("btn-repeat");
+      btn.classList.toggle("text-gold-400", state.repeat);
+      btn.classList.toggle("text-slate-400", !state.repeat);
+      showToast(state.repeat ? "Répétition de piste activée" : "Répétition désactivée");
+    }
+
+    function seekTrack(percent) {
+      const track = TRACKS[state.currentTrackIndex];
+      state.currentTime = (percent / 100) * track.duration;
+      updateProgressUI();
+    }
+
+    function seekFromMiniBar(event) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const percent = Math.max(0, Math.min(100, (clickX / rect.width) * 100));
+      seekTrack(percent);
+    }
+
+    function setVolume(val) {
+      state.volume = val / 100;
+      state.isMuted = state.volume === 0;
+      if (masterGain && audioCtx) {
+        masterGain.gain.setValueAtTime(state.isMuted ? 0 : state.volume * 0.45, audioCtx.currentTime);
+      }
+      document.getElementById("volume-slider").value = val;
+      document.getElementById("mini-volume-slider").value = val;
+      document.getElementById("volume-label").textContent = `${val}%`;
+    }
+
+    function toggleMute() {
+      state.isMuted = !state.isMuted;
+      if (masterGain && audioCtx) {
+        masterGain.gain.setValueAtTime(state.isMuted ? 0 : state.volume * 0.45, audioCtx.currentTime);
+      }
+      showToast(state.isMuted ? "Son coupé" : "Son rétabli");
+    }
+
+    function toggleLikeTrack(trackId, event) {
+      if (event) event.stopPropagation();
+      const track = TRACKS.find((t) => t.id === trackId);
+      if (!track) return;
+      track.liked = !track.liked;
+      updatePlayerUI();
+      renderHomeLists();
+      renderLibrary();
+      showToast(track.liked ? `Ajouté aux favoris : ${track.title}` : `Retiré des favoris : ${track.title}`);
+    }
+
+    function toggleLikeCurrent() {
+      const track = TRACKS[state.currentTrackIndex];
+      toggleLikeTrack(track.id);
+    }
+
+    function startProgressTimer() {
+      stopProgressTimer();
+      progressInterval = setInterval(() => {
+        if (!state.isPlaying) return;
+        const track = TRACKS[state.currentTrackIndex];
+        state.currentTime += 0.25;
+
+        if (state.currentTime >= track.duration) {
+          if (state.repeat) {
+            state.currentTime = 0;
+          } else {
+            nextTrack();
+            return;
+          }
+        }
+        updateProgressUI();
+      }, 250);
+    }
+
+    function stopProgressTimer() {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+    }
+
+    function updateProgressUI() {
+      const track = TRACKS[state.currentTrackIndex];
+      const pct = Math.min(100, (state.currentTime / track.duration) * 100);
+
+      document.getElementById("player-progress").value = pct;
+      document.getElementById("mini-progress-bar").style.width = `${pct}%`;
+
+      document.getElementById("player-current-time").textContent = formatTime(state.currentTime);
+      document.getElementById("player-remaining-time").textContent = `-${formatTime(track.duration - state.currentTime)}`;
+      document.getElementById("mini-time").textContent = `${formatTime(state.currentTime)} / ${formatTime(track.duration)}`;
+
+      // Mise à jour surbrillance paroles synchronisées
+      updateSyncedLyricsHighlight(track);
+    }
+
+    function updatePlayButtonsUI() {
+      const playSVG = `<polygon points="5 3 19 12 5 21 5 3" />`;
+      const pauseSVG = `<rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" />`;
+
+      document.getElementById("player-play-icon").innerHTML = state.isPlaying ? pauseSVG : playSVG;
+      document.getElementById("mini-play-icon").innerHTML = state.isPlaying ? pauseSVG : playSVG;
+
+      const artWrapper = document.getElementById("player-artwork-wrapper");
+      const navDot = document.getElementById("nav-playing-dot");
+      if (state.isPlaying) {
+        artWrapper.classList.add("playing-glow");
+        navDot.classList.remove("hidden");
+      } else {
+        artWrapper.classList.remove("playing-glow");
+        navDot.classList.add("hidden");
+      }
+    }
+
+    function updatePlayerUI() {
+      const track = TRACKS[state.currentTrackIndex];
+
+      // Mini-player
+      document.getElementById("mini-title").textContent = track.title;
+      document.getElementById("mini-artist").textContent = track.artist;
+      document.getElementById("mini-bpm-badge").textContent = `${track.bpm} BPM`;
+      document.getElementById("mini-artwork").innerHTML = generateArtworkSVG(track, false);
+
+      // Lecteur immersif
+      document.getElementById("player-title").textContent = track.title;
+      document.getElementById("player-artist").textContent = `${track.artist} • ${track.album}`;
+      document.getElementById("player-artwork").innerHTML = generateArtworkSVG(track, true);
+      document.getElementById("player-ambient-glow").style.background = `radial-gradient(circle at 50% 35%, ${track.colors[0]}55, transparent 70%)`;
+
+      // Bouton Like
+      const likeBtn = document.getElementById("player-like-btn");
+      likeBtn.innerHTML = track.liked
+        ? `<svg class="w-5 h-5 text-gold-400 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
+        : `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>`;
+
+      // Onglet Analyse IA
+      document.getElementById("analysis-bpm").textContent = `${track.bpm} BPM`;
+      document.getElementById("analysis-key").textContent = track.musicalKey;
+      document.getElementById("analysis-energy").textContent = `${track.energy}%`;
+      document.getElementById("analysis-genre-tag").textContent = `${track.genre} • ${track.musicalKey}`;
+      document.getElementById("stat-groove").textContent = `${track.synthProfile.groove}%`;
+      document.getElementById("bar-groove").style.width = `${track.synthProfile.groove}%`;
+      document.getElementById("stat-warmth").textContent = `${track.synthProfile.warmth}%`;
+      document.getElementById("bar-warmth").style.width = `${track.synthProfile.warmth}%`;
+      document.getElementById("stat-clarity").textContent = `${track.synthProfile.clarity}%`;
+      document.getElementById("bar-clarity").style.width = `${track.synthProfile.clarity}%`;
+
+      // Paroles & Insight
+      document.getElementById("lyrics-ai-insight").textContent = track.aiInsight;
+      renderLyricsList(track);
+      updateProgressUI();
+    }
+
+    function renderLyricsList(track) {
+      const container = document.getElementById("lyrics-container");
+      container.innerHTML = track.lyrics
+        .map(
+          (line, idx) => `
+          <div
+            id="lyric-line-${idx}"
+            onclick="seekToTimestamp(${line.time})"
+            class="lyric-line cursor-pointer p-3 rounded-xl transition-all duration-300 text-slate-400 hover:text-white hover:bg-white/5 text-sm sm:text-base font-medium"
+          >
+            <span class="text-[11px] font-mono text-gold-400/70 mr-2">${formatTime(line.time)}</span>
+            ${line.text}
+          </div>
+        `
+        )
+        .join("");
+    }
+
+    function updateSyncedLyricsHighlight(track) {
+      let activeIdx = 0;
+      for (let i = 0; i < track.lyrics.length; i++) {
+        if (state.currentTime >= track.lyrics[i].time) {
+          activeIdx = i;
+        }
+      }
+      track.lyrics.forEach((_, idx) => {
+        const el = document.getElementById(`lyric-line-${idx}`);
+        if (!el) return;
+        if (idx === activeIdx) {
+          el.className =
+            "lyric-line cursor-pointer p-3.5 rounded-xl transition-all duration-300 bg-gold-400/15 border border-gold-400/35 text-gold-300 font-bold text-base sm:text-lg scale-[1.01]";
+        } else {
+          el.className =
+            "lyric-line cursor-pointer p-3 rounded-xl transition-all duration-300 text-slate-400 hover:text-white hover:bg-white/5 text-sm sm:text-base font-medium";
+        }
+      });
+    }
+
+    function seekToTimestamp(sec) {
+      state.currentTime = sec;
+      if (!state.isPlaying) togglePlay();
+      updateProgressUI();
+    }
+
+    // =========================================================================
+    // 5. VISUALISEUR AUDIO TEMPS RÉEL (CANVAS RESPONSIVE)
+    // =========================================================================
+    function startVisualizerLoop() {
+      const canvas = document.getElementById("audio-visualizer");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+
+      function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+      }
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+
+      const dataArray = new Uint8Array(64);
+      let phase = 0;
+
+      function draw() {
+        requestAnimationFrame(draw);
+        const width = canvas.width;
+        const height = canvas.height;
+        ctx.clearRect(0, 0, width, height);
+
+        if (analyser && state.isPlaying) {
+          analyser.getByteFrequencyData(dataArray);
+        } else {
+          phase += 0.04;
+          for (let i = 0; i < dataArray.length; i++) {
+            dataArray[i] = state.isPlaying
+              ? 80 + Math.sin(phase + i * 0.3) * 50
+              : 18 + Math.sin(phase + i * 0.25) * 10;
+          }
+        }
+
+        const barCount = 42;
+        const gap = 4 * window.devicePixelRatio;
+        const barWidth = (width - gap * (barCount - 1)) / barCount;
+
+        for (let i = 0; i < barCount; i++) {
+          const val = dataArray[i] || 20;
+          const barHeight = Math.max(6 * window.devicePixelRatio, (val / 255) * (height * 0.88));
+          const x = i * (barWidth + gap);
+          const y = (height - barHeight) / 2;
+
+          const grad = ctx.createLinearGradient(0, y, 0, y + barHeight);
+          grad.addColorStop(0, "#FACC15");
+          grad.addColorStop(0.5, "#D4AF37");
+          grad.addColorStop(1, "#3B82F6");
+
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.roundRect(x, y, barWidth, barHeight, 4 * window.devicePixelRatio);
+          ctx.fill();
+        }
+      }
+      draw();
+    }
+
+    // =========================================================================
+    // 6. NAVIGATION ENTRE LES VUES & SOUS-ONGLETS
+    // =========================================================================
+    function switchView(viewName) {
+      state.currentView = viewName;
+      document.querySelectorAll(".view-section").forEach((sec) => {
+        sec.classList.add("hidden");
+      });
+      const target = document.getElementById(`view-${viewName}`);
+      if (target) target.classList.remove("hidden");
+
+      // Mise à jour style navigation Desktop
+      document.querySelectorAll("#desktop-nav .nav-btn").forEach((btn) => {
+        const active = btn.dataset.view === viewName;
+        btn.className = active
+          ? "nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all text-left bg-gradient-to-r from-gold-400/20 to-blue-600/20 text-gold-300 border border-gold-400/35 shadow-lg"
+          : "nav-btn w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all text-left text-slate-400 hover:text-white hover:bg-white/5";
+      });
+
+      // Mise à jour style navigation Mobile
+      document.querySelectorAll("#mobile-nav .mob-nav-btn").forEach((btn) => {
+        const active = btn.dataset.view === viewName;
+        btn.className = active
+          ? "mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-gold-400"
+          : "mob-nav-btn flex flex-col items-center justify-center gap-1 py-1 px-2 text-slate-400";
+      });
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function switchPlayerSubTab(tab) {
+      const isLyrics = tab === "lyrics";
+      document.getElementById("subtab-lyrics").classList.toggle("hidden", !isLyrics);
+      document.getElementById("subtab-ai-analysis").classList.toggle("hidden", isLyrics);
+
+      document.getElementById("subtab-btn-lyrics").className = isLyrics
+        ? "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold bg-gold-400 text-obsidian transition"
+        : "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition";
+
+      document.getElementById("subtab-btn-ai-analysis").className = !isLyrics
+        ? "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold bg-gold-400 text-obsidian transition"
+        : "flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition";
+    }
+
+    // =========================================================================
+    // 7. RENDU VUE ACCUEIL & FILTRES HUMEUR
+    // =========================================================================
+    function initDynamicGreeting() {
+      const hour = new Date().getHours();
+      const el = document.getElementById("dynamic-greeting");
+      const badge = document.getElementById("ai-context-badge");
+      if (hour >= 5 && hour < 12) {
+        el.innerHTML = `Bonjour, démarrez votre matinée avec une clarté sonore <span class="gold-gradient-text">sur mesure</span>.`;
+        badge.textContent = "Mode Matinal • Clarté & Énergie Douce";
+      } else if (hour >= 12 && hour < 18) {
+        el.innerHTML = `Bon après-midi, boostez votre créativité avec <span class="gold-gradient-text">AuraAI</span>.`;
+        badge.textContent = "Mode Productivité • Flux & Focus IA";
+      } else {
+        el.innerHTML = `Bonsoir, prêt pour une immersion nocturne <span class="gold-gradient-text">sur mesure</span> ?`;
+        badge.textContent = "Mode Nocturne • Zouk Velours & Synthwave";
+      }
+    }
+
+    function renderMoodCards() {
+      const container = document.getElementById("ai-mood-cards");
+      container.innerHTML = AI_MOOD_PRESETS.map(
+        (preset) => `
+        <div onclick="playTrackByIndex(${preset.trackIndex})" class="glass-card rounded-3xl p-5 cursor-pointer relative overflow-hidden group flex flex-col justify-between min-h-[175px]">
+          <div class="absolute inset-0 bg-gradient-to-br ${preset.accent} opacity-60 group-hover:opacity-90 transition"></div>
+          <div class="relative z-10 flex items-center justify-between">
+            <span class="text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full bg-obsidian/70 text-gold-300 border border-gold-400/30">
+              ${preset.badge}
+            </span>
+            <span class="w-9 h-9 rounded-full gold-btn flex items-center justify-center opacity-90 group-hover:scale-110 transition">
+              <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </span>
+          </div>
+          <div class="relative z-10 mt-6">
+            <h3 class="text-base font-extrabold text-white group-hover:text-gold-300 transition">${preset.title}</h3>
+            <p class="text-xs text-slate-300 mt-1">${preset.subtitle}</p>
+            <div class="text-[11px] font-mono text-gold-400 mt-2">${preset.bpmRange}</div>
+          </div>
+        </div>
+      `
+      ).join("");
+    }
+
+    function filterHomeByMood(mood, btnEl) {
+      state.homeMoodFilter = mood;
+      document.querySelectorAll(".mood-pill").forEach((pill) => {
+        pill.className =
+          "mood-pill px-4 py-2 rounded-full text-xs font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 transition whitespace-nowrap";
+      });
+      if (btnEl) {
+        btnEl.className =
+          "mood-pill active-mood px-4 py-2 rounded-full text-xs font-bold bg-gold-400 text-obsidian transition whitespace-nowrap";
+      }
+      const labels = {
+        all: "Toutes les ambiances",
+        focus: "Focus & Flow",
+        zouk: "Zouk & R&B Nocturne",
+        studio: "Énergie Studio",
+        chill: "Chill & Synthwave"
+      };
+      document.getElementById("mood-filter-status").textContent = labels[mood] || "Toutes les ambiances";
+      renderHomeLists();
+    }
+
+    function renderHomeLists() {
+      const filteredTracks =
+        state.homeMoodFilter === "all"
+          ? TRACKS
+          : TRACKS.filter((t) => t.mood === state.homeMoodFilter);
+
+      // Écoutés récemment
+      const recentContainer = document.getElementById("recent-tracks-list");
+      recentContainer.innerHTML = TRACKS.slice(0, 4)
+        .map((track, idx) => {
+          const isCurrent = idx === state.currentTrackIndex;
+          return `
+          <div onclick="playTrackByIndex(${idx})" class="flex items-center justify-between gap-3 p-2.5 rounded-2xl cursor-pointer transition ${
+            isCurrent ? "bg-gold-400/15 border border-gold-400/35" : "hover:bg-white/5 border border-transparent"
+          }">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-11 h-11 rounded-xl overflow-hidden shrink-0">${generateArtworkSVG(track, false)}</div>
+              <div class="min-w-0">
+                <div class="text-sm font-bold truncate ${isCurrent ? "text-gold-300" : "text-white"}">${track.title}</div>
+                <div class="text-xs text-slate-400 truncate">${track.artist}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] font-mono text-slate-400">${formatTime(track.duration)}</span>
+              <button onclick="toggleLikeTrack(${track.id}, event)" class="p-1.5 text-slate-400 hover:text-gold-400">
+                ${track.liked ? "❤️" : "🤍"}
+              </button>
+            </div>
+          </div>
+        `;
+        })
+        .join("");
+
+      // Recommandations intelligentes
+      const recGrid = document.getElementById("smart-recommendations-grid");
+      recGrid.innerHTML = filteredTracks
+        .map((track) => {
+          const realIndex = TRACKS.findIndex((t) => t.id === track.id);
+          const isCurrent = realIndex === state.currentTrackIndex;
+          return `
+          <div onclick="playTrackByIndex(${realIndex})" class="glass-card rounded-2xl p-3.5 flex items-center gap-3.5 cursor-pointer group ${
+            isCurrent ? "border-gold-400" : ""
+          }">
+            <div class="w-14 h-14 rounded-xl overflow-hidden shrink-0 relative">
+              ${generateArtworkSVG(track, false)}
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                <svg class="w-6 h-6 text-gold-400 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-bold text-white group-hover:text-gold-300 truncate">${track.title}</div>
+              <div class="text-xs text-slate-400 truncate">${track.artist}</div>
+              <div class="flex items-center gap-2 mt-1.5">
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-gold-300">${track.bpm} BPM</span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-slate-300">${track.musicalKey}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        })
+        .join("");
+    }
+
+    // =========================================================================
+    // 8. ACTIONS IA EN DIRECT & STUDIO CO-PILOTE
+    // =========================================================================
+    function applyLiveAIAction(action) {
+      const track = TRACKS[state.currentTrackIndex];
+      if (!state.isPlaying) togglePlay();
+
+      if (action === "extend") {
+        track.duration += 60;
+        updateProgressUI();
+        showToast("Boucle IA étendue (+60s)", `Arrangement prolongé sur ${track.title}`);
+      } else if (action === "vocals") {
+        // Accentue les médiums (1kHz et 3kHz) sur l'égaliseur
+        applyEQPreset("vocal");
+        showToast("Isolation Vocale / Lead activée", "Courbe DSP centrée sur 1kHz - 3kHz");
+      } else if (action === "transition") {
+        showToast("Transition DJ harmonique...", "Synchronisation du BPM en cours");
+        setTimeout(() => nextTrack(), 900);
+      } else if (action === "remix") {
+        const remixTrack = {
+          ...track,
+          id: Date.now(),
+          title: `${track.title} (AuraAI Midnight Remix)`,
+          bpm: track.bpm + 4,
+          energy: Math.min(99, track.energy + 10),
+          liked: true
+        };
+        TRACKS.unshift(remixTrack);
+        loadTrack(0, true);
+        showToast("Remix IA généré !", `${remixTrack.title} • ${remixTrack.bpm} BPM`);
+      }
+    }
+
+    function triggerSmartAutoDJ() {
+      const randomIdx = Math.floor(Math.random() * TRACKS.length);
+      loadTrack(randomIdx, true);
+      switchView("player");
+      showToast("Mix Instantané IA lancé", `Sélection : ${TRACKS[randomIdx].title}`);
+    }
+
+    function appendStudioTag(tag) {
+      const textarea = document.getElementById("ai-prompt-input");
+      if (!textarea.value.includes(tag)) {
+        textarea.value = textarea.value.trim() ? `${textarea.value.trim()}, ${tag}` : tag;
+      }
+    }
+
+    function generateAIPlaylist() {
+      const prompt = document.getElementById("ai-prompt-input").value.trim() || "Ambiance nocturne équilibrée";
+      const bpm = parseInt(document.getElementById("studio-bpm-val").textContent, 10) || 102;
+
+      const lower = prompt.toLowerCase();
+      let selected = [0, 4, 1, 2];
+      let title = "Mix Sur Mesure : Nocturne & Velours";
+
+      if (lower.includes("focus") || lower.includes("travail") || lower.includes("calme")) {
+        selected = [1, 5, 2, 0];
+        title = "Session IA : Clarté Mentale & Flow";
+      } else if (lower.includes("énergie") || lower.includes("studio") || lower.includes("808") || bpm > 115) {
+        selected = [3, 2, 0, 4];
+        title = "Session IA : Impulsion Studio & Haute Énergie";
+      } else if (lower.includes("zouk") || lower.includes("r&b")) {
+        selected = [0, 4, 5, 1];
+        title = "Session IA : Zouk Love & R&B Doré";
+      }
+
+      state.generatedPlaylistIndices = selected;
+      document.getElementById("gen-playlist-title").textContent = title;
+      document.getElementById("gen-playlist-rationale").innerHTML = `
+        💡 <strong>Analyse du prompt (« ${prompt} ») :</strong> AuraAI a sélectionné ${selected.length} titres autour de <strong>${bpm} BPM</strong> avec cohérence harmonique optimale pour des transitions fluides.
+      `;
+
+      renderGeneratedPlaylistTracks();
+      showToast("Playlist IA générée !", `${selected.length} pistes prêtes à être jouées`);
+    }
+
+    function renderGeneratedPlaylistTracks() {
+      const container = document.getElementById("gen-playlist-tracks");
+      container.innerHTML = state.generatedPlaylistIndices
+        .map((trackIdx, pos) => {
+          const track = TRACKS[trackIdx];
+          return `
+          <div onclick="playTrackByIndex(${trackIdx})" class="flex items-center justify-between p-3 rounded-2xl bg-white/5 hover:bg-gold-400/15 border border-white/10 cursor-pointer transition">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-xs font-mono text-gold-400 w-5">0${pos + 1}</span>
+              <div class="w-10 h-10 rounded-xl overflow-hidden shrink-0">${generateArtworkSVG(track, false)}</div>
+              <div class="min-w-0">
+                <div class="text-sm font-bold text-white truncate">${track.title}</div>
+                <div class="text-xs text-slate-400 truncate">${track.artist} • ${track.genre}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-xs font-mono text-gold-300">${track.bpm} BPM</span>
+              <span class="text-xs font-mono text-slate-400">${formatTime(track.duration)}</span>
+            </div>
+          </div>
+        `;
+        })
+        .join("");
+    }
+
+    function playGeneratedPlaylist() {
+      if (state.generatedPlaylistIndices.length > 0) {
+        playTrackByIndex(state.generatedPlaylistIndices[0]);
+        switchView("player");
+      }
+    }
+
+    // Chat Co-Pilote IA
+    function handleChatSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById("ai-chat-input");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      appendChatMessage("user", text);
+      respondAsAICopilot(text);
+    }
+
+    function sendQuickChat(text) {
+      appendChatMessage("user", text);
+      respondAsAICopilot(text);
+    }
+
+    function appendChatMessage(sender, htmlText) {
+      const container = document.getElementById("ai-chat-messages");
+      const div = document.createElement("div");
+      if (sender === "user") {
+        div.className =
+          "ml-auto max-w-[85%] bg-gold-400 text-obsidian font-medium rounded-2xl rounded-tr-sm p-3.5 text-xs sm:text-sm";
+      } else {
+        div.className =
+          "mr-auto max-w-[90%] bg-white/5 border border-white/10 text-slate-200 rounded-2xl rounded-tl-sm p-3.5 text-xs sm:text-sm leading-relaxed";
+      }
+      div.innerHTML = htmlText;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function respondAsAICopilot(userMsg) {
+      const lower = userMsg.toLowerCase();
+      const current = TRACKS[state.currentTrackIndex];
+      let reply = "";
+
+      if (lower.includes("analyse") || lower.includes("actuel")) {
+        reply = `📊 <strong>Analyse de « ${current.title} » :</strong><br/>• Tempo : <strong>${current.bpm} BPM</strong> | Tonalité : <strong>${current.musicalKey}</strong><br/>• Énergie : <strong>${current.energy}%</strong> (${current.genre})<br/>• Conseil DJ : Ce titre s'enchaîne idéalement avec <em>${TRACKS[(state.currentTrackIndex + 1) % TRACKS.length].title}</em>.`;
+      } else if (lower.includes("focus") || lower.includes("travail")) {
+        reply = `🎧 J'ai préparé une file d'attente <strong>Focus & Flow</strong> autour de 92-96 BPM. <br/><button onclick="playTrackByIndex(1)" class="mt-2 px-3 py-1.5 rounded-lg bg-gold-400 text-obsidian font-bold text-xs">▶ Lancer « Horizons Dorés »</button>`;
+      } else if (lower.includes("zouk") || lower.includes("r&b")) {
+        reply = `🌙 Pour une ambiance Zouk & R&B nocturne, je recommande <strong>« Velours d'Abidjan »</strong> (104 BPM, Fm) ou <strong>« Étoile de Minuit »</strong> (98 BPM, Dm). <br/><button onclick="playTrackByIndex(0)" class="mt-2 px-3 py-1.5 rounded-lg bg-gold-400 text-obsidian font-bold text-xs">▶ Écouter maintenant</button>`;
+      } else {
+        reply = `✨ Compris ! J'adapte le moteur harmonique selon votre demande. Vous pouvez aussi cliquer ci-dessous pour lancer un mix optimisé : <br/><button onclick="triggerSmartAutoDJ()" class="mt-2 px-3 py-1.5 rounded-lg bg-gold-400 text-obsidian font-bold text-xs">⚡ Lancer le Mix IA</button>`;
+      }
+
+      setTimeout(() => appendChatMessage("ai", reply), 280);
+    }
+
+    function clearAIChat() {
+      document.getElementById("ai-chat-messages").innerHTML = `
+        <div class="bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm p-3.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
+          Conversation réinitialisée. Comment puis-je accompagner votre écoute ?
+        </div>
+      `;
+    }
+
+    // =========================================================================
+    // 9. VUE BIBLIOTHÈQUE & PLAYLISTS
+    // =========================================================================
+    function switchLibraryTab(tab, btnEl) {
+      state.libraryTab = tab;
+      document.querySelectorAll(".lib-tab").forEach((b) => {
+        b.className = "lib-tab px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition";
+      });
+      if (btnEl) {
+        btnEl.className = "lib-tab px-3.5 py-2 rounded-xl text-xs font-bold bg-gold-400 text-obsidian transition";
+      }
+      renderLibrary();
+    }
+
+    function renderLibrary() {
+      const container = document.getElementById("library-content-area");
+      const query = (document.getElementById("library-search-input")?.value || "").toLowerCase();
+      const genreFilter = document.getElementById("library-genre-filter")?.value || "all";
+      const bpmFilter = document.getElementById("library-bpm-filter")?.value || "all";
+
+      if (state.libraryTab === "playlists") {
+        container.innerHTML = `
+          <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            ${AI_MOOD_PRESETS.map(
+              (p) => `
+              <div onclick="playTrackByIndex(${p.trackIndex})" class="glass-card rounded-2xl p-5 cursor-pointer space-y-3">
+                <div class="h-28 rounded-xl bg-gradient-to-br ${p.accent} flex items-center justify-center border border-white/10">
+                  <span class="text-2xl">🎵</span>
+                </div>
+                <div>
+                  <h3 class="font-bold text-white">${p.title}</h3>
+                  <p class="text-xs text-slate-400 mt-0.5">${p.subtitle}</p>
+                </div>
+                <div class="text-xs font-mono text-gold-400">${p.bpmRange}</div>
+              </div>
+            `
+            ).join("")}
+          </div>
+        `;
+        return;
+      }
+
+      if (state.libraryTab === "artists") {
+        const artists = [...new Set(TRACKS.map((t) => t.artist))];
+        container.innerHTML = `
+          <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${artists
+              .map((artist, i) => {
+                const count = TRACKS.filter((t) => t.artist === artist).length;
+                return `
+                <div onclick="playTrackByIndex(${i % TRACKS.length})" class="glass-card rounded-2xl p-4 flex items-center gap-4 cursor-pointer">
+                  <div class="w-14 h-14 rounded-full bg-gradient-to-br from-gold-400 to-blue-700 flex items-center justify-center text-lg font-extrabold text-obsidian shrink-0">
+                    ${artist.charAt(0)}
+                  </div>
+                  <div>
+                    <div class="font-bold text-white">${artist}</div>
+                    <div class="text-xs text-slate-400">${count} titre(s) • Audio Studio IA</div>
+                  </div>
+                </div>
+              `;
+              })
+              .join("")}
+          </div>
+        `;
+        return;
+      }
+
+      // Filtrage des pistes
+      let list = TRACKS.filter((t) => {
+        if (state.libraryTab === "liked" && !t.liked) return false;
+        if (genreFilter !== "all" && t.genre !== genreFilter) return false;
+        if (bpmFilter === "slow" && t.bpm >= 100) return false;
+        if (bpmFilter === "mid" && (t.bpm < 100 || t.bpm > 115)) return false;
+        if (bpmFilter === "fast" && t.bpm <= 115) return false;
+        if (
+          query &&
+          !t.title.toLowerCase().includes(query) &&
+          !t.artist.toLowerCase().includes(query) &&
+          !t.musicalKey.toLowerCase().includes(query)
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="p-10 text-center text-sm text-slate-400">Aucune piste ne correspond à vos filtres actuels.</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-white/10 text-[11px] font-mono uppercase text-slate-400">
+                <th class="py-3.5 px-4">#</th>
+                <th class="py-3.5 px-4">Titre & Artiste</th>
+                <th class="py-3.5 px-4 hidden md:table-cell">Genre</th>
+                <th class="py-3.5 px-4">BPM</th>
+                <th class="py-3.5 px-4 hidden sm:table-cell">Tonalité</th>
+                <th class="py-3.5 px-4 text-right">Durée</th>
+                <th class="py-3.5 px-4 text-center">Favori</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5 text-sm">
+              ${list
+                .map((track, idx) => {
+                  const realIdx = TRACKS.findIndex((t) => t.id === track.id);
+                  const isCurrent = realIdx === state.currentTrackIndex;
+                  return `
+                  <tr onclick="playTrackByIndex(${realIdx})" class="cursor-pointer transition ${
+                    isCurrent ? "bg-gold-400/15" : "hover:bg-white/5"
+                  }">
+                    <td class="py-3 px-4 font-mono text-xs ${isCurrent ? "text-gold-400 font-bold" : "text-slate-500"}">
+                      ${isCurrent && state.isPlaying ? "▶" : idx + 1}
+                    </td>
+                    <td class="py-3 px-4">
+                      <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg overflow-hidden shrink-0">${generateArtworkSVG(track, false)}</div>
+                        <div>
+                          <div class="font-bold ${isCurrent ? "text-gold-300" : "text-white"}">${track.title}</div>
+                          <div class="text-xs text-slate-400">${track.artist}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-3 px-4 hidden md:table-cell text-xs text-slate-300">${track.genre}</td>
+                    <td class="py-3 px-4 font-mono text-xs text-gold-300">${track.bpm}</td>
+                    <td class="py-3 px-4 hidden sm:table-cell font-mono text-xs text-slate-300">${track.musicalKey}</td>
+                    <td class="py-3 px-4 text-right font-mono text-xs text-slate-400">${formatTime(track.duration)}</td>
+                    <td class="py-3 px-4 text-center">
+                      <button onclick="toggleLikeTrack(${track.id}, event)" class="p-1.5 hover:scale-110 transition">
+                        ${track.liked ? "❤️" : "🤍"}
+                      </button>
+                    </td>
+                  </tr>
+                `;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function handleGlobalSearch(val) {
+      const libInput = document.getElementById("library-search-input");
+      if (libInput) libInput.value = val;
+      if (val.trim().length > 0 && state.currentView !== "library") {
+        switchView("library");
+      }
+      renderLibrary();
+    }
+
+    // =========================================================================
+    // 10. ÉGALISEUR 7 BANDES & PARAMÈTRES AUDIO 3D
+    // =========================================================================
+    const EQ_PRESETS = {
+      flat: [0, 0, 0, 0, 0, 0, 0],
+      bass: [8, 6, 2, 0, 0, 2, 3],
+      zouk: [6, 4, -1, 1, 3, 5, 4],
+      studio: [3, 2, 0, 1, 4, 5, 6],
+      vocal: [-2, -1, 2, 6, 5, 2, 0]
+    };
+
+    function renderEQBands() {
+      const container = document.getElementById("eq-bands-container");
+      container.innerHTML = EQ_LABELS.map(
+        (label, idx) => `
+        <div class="flex flex-col items-center">
+          <span id="eq-val-${idx}" class="text-[11px] font-mono text-gold-300 mb-2">
+            ${state.eqGains[idx] > 0 ? "+" : ""}${state.eqGains[idx]}dB
+          </span>
+          <div class="eq-slider-wrap">
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="1"
+              value="${state.eqGains[idx]}"
+              oninput="updateEQBand(${idx}, this.value)"
+              class="eq-vertical"
+            />
+          </div>
+          <span class="text-[11px] font-mono text-slate-400 mt-2">${label}</span>
+        </div>
+      `
+      ).join("");
+    }
+
+    function updateEQBand(bandIndex, gainVal) {
+      const gain = parseFloat(gainVal);
+      state.eqGains[bandIndex] = gain;
+      const label = document.getElementById(`eq-val-${bandIndex}`);
+      if (label) label.textContent = `${gain > 0 ? "+" : ""}${gain}dB`;
+
+      if (eqFilters[bandIndex] && audioCtx) {
+        eqFilters[bandIndex].gain.setValueAtTime(gain, audioCtx.currentTime);
+      }
+    }
+
+    function applyEQPreset(presetName, btnEl) {
+      const values = EQ_PRESETS[presetName] || EQ_PRESETS.flat;
+      state.eqGains = [...values];
+      renderEQBands();
+
+      if (eqFilters.length > 0 && audioCtx) {
+        values.forEach((g, idx) => {
+          eqFilters[idx].gain.setValueAtTime(g, audioCtx.currentTime);
+        });
+      }
+
+      document.querySelectorAll(".eq-preset-btn").forEach((b) => {
+        b.className =
+          "eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition";
+      });
+      if (btnEl) {
+        btnEl.className = "eq-preset-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-gold-400 text-obsidian transition";
+      }
+      showToast(`Préréglage Égaliseur : ${presetName.toUpperCase()}`);
+    }
+
+    function toggleAudioSetting(key, enabled) {
+      state.audioSettings[key] = enabled;
+      const names = {
+        crossfade: "Fondu enchaîné intelligent",
+        normalize: "Normalisation IA (-14 LUFS)",
+        spatial: "Spatial Audio 3D Binaural"
+      };
+      showToast(`${names[key]} : ${enabled ? "Activé" : "Désactivé"}`);
+    }
+
+    // =========================================================================
+    // 11. SYSTÈME DE NOTIFICATIONS TOAST (SANS ALERT)
+    // =========================================================================
+    function showToast(title, subtitle = "") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+      toast.className =
+        "toast-enter pointer-events-auto glass-panel border border-gold-400/40 rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-3";
+      toast.innerHTML = `
+        <div class="w-2.5 h-2.5 rounded-full bg-gold-400 shrink-0"></div>
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-white truncate">${title}</div>
+          ${subtitle ? `<div class="text-[11px] text-gold-300 truncate">${subtitle}</div>` : ""}
+        </div>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-8px)";
+        toast.style.transition = "all 0.25s ease";
+        setTimeout(() => toast.remove(), 260);
+      }, 2800);
+    }
+
+    // =========================================================================
+    // 12. INITIALISATION AU CHARGEMENT
+    // =========================================================================
+    window.addEventListener("DOMContentLoaded", () => {
+      initDynamicGreeting();
+      renderMoodCards();
+      renderHomeLists();
+      renderGeneratedPlaylistTracks();
+      renderLibrary();
+      renderEQBands();
+      loadTrack(0, false);
+      switchView("home");
+      startVisualizerLoop();
+    });
+  </script>
+</body>
+</html>
