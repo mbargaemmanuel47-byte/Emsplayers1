@@ -102,19 +102,19 @@ fun ProPaywallDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = "Ems Player Pro",
+                                contentDescription = "Em Player Pro",
                                 tint = Obsidian,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                         Column {
                             Text(
-                                text = "EMS PLAYER PRO",
+                                text = "EM PLAYER PRO",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = GoldBright
                             )
                             Text(
-                                text = "Génération Musicale IA",
+                                text = "Studio Musical IA",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = Color.White
                             )
@@ -127,7 +127,7 @@ fun ProPaywallDialog(
                 }
 
                 Text(
-                    text = "La lecture audio locale, l'égaliseur 7 bandes et le lecteur restent gratuits. La composition et génération musicale par IA (Gemini 3.8 Flash) nécessitent un accès Pro Google Play.",
+                    text = "La lecture audio locale, l'égaliseur et le lecteur restent gratuits. Les mixes et recommandations intelligentes sont inclus dans Em Player Pro.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
                 )
@@ -141,9 +141,9 @@ fun ProPaywallDialog(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    PaywallBenefitRow("Générateur de Playlists & Mixes Gemini sur mesure")
-                    PaywallBenefitRow("Composition de Remixes IA 48kHz temps réel")
-                    PaywallBenefitRow("Co-Pilote DJ IA Aura en streaming illimité")
+                    PaywallBenefitRow("Création de playlists et mixes sur mesure")
+                    PaywallBenefitRow("Sélections intelligentes à partir de vos musiques")
+                    PaywallBenefitRow("Assistant musical en direct")
                 }
 
                 if (billingState.isConnecting) {
@@ -229,7 +229,7 @@ fun ProPaywallDialog(
                         )
                         Text(
                             text = billingState.statusMessage
-                                ?: "Offres Google Play non disponibles. Publiez les produits (ems_player_ai_pro / ems_player_ai_lifetime) dans la Google Play Console.",
+                                ?: "Offres d'abonnement actuellement indisponibles.",
                             style = MaterialTheme.typography.bodyMedium,
                             fontSize = 12.sp,
                             color = TextSecondary

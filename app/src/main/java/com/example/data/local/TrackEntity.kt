@@ -33,7 +33,13 @@ data class TrackEntity(
     val lyricsEncoded: String,
     val localUri: String? = null,
     val isAiGenerated: Boolean = false,
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0L,
+    val fileSizeBytes: Long = 0L,
+    val bitrateKbps: Int = 0,
+    val mimeFormat: String = "",
+    val year: String = ""
 ) {
     fun toDomain(): Track {
         val parsedLyrics = if (lyricsEncoded.isBlank()) {
@@ -73,7 +79,13 @@ data class TrackEntity(
             aiInsight = aiInsight,
             lyrics = parsedLyrics,
             localUri = localUri,
-            isAiGenerated = isAiGenerated
+            isAiGenerated = isAiGenerated,
+            playCount = playCount,
+            lastPlayedAt = lastPlayedAt,
+            fileSizeBytes = fileSizeBytes,
+            bitrateKbps = bitrateKbps,
+            mimeFormat = mimeFormat,
+            year = year
         )
     }
 
@@ -105,7 +117,13 @@ data class TrackEntity(
                 lyricsEncoded = track.lyrics.joinToString("\n") { "${it.timeSec}||${it.text}" },
                 localUri = track.localUri,
                 isAiGenerated = track.isAiGenerated,
-                sortOrder = sortOrder
+                sortOrder = sortOrder,
+                playCount = track.playCount,
+                lastPlayedAt = track.lastPlayedAt,
+                fileSizeBytes = track.fileSizeBytes,
+                bitrateKbps = track.bitrateKbps,
+                mimeFormat = track.mimeFormat,
+                year = track.year
             )
         }
     }

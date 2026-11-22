@@ -7,19 +7,22 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -30,7 +33,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.remember
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,6 +45,7 @@ import com.example.ui.components.AuraNavigationRail
 import com.example.ui.components.AuraRoutes
 import com.example.ui.components.AuraToastOverlay
 import com.example.ui.components.AuraTopHeader
+import com.example.ui.components.FloatingAmbientBackground
 import com.example.ui.components.ProPaywallDialog
 import com.example.ui.screens.EqualizerScreen
 import com.example.ui.screens.HomeScreen
@@ -52,6 +55,7 @@ import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.StudioScreen
 import com.example.ui.theme.AuraAITheme
 import com.example.ui.theme.DeepBlue
+import com.example.ui.theme.GoldBright
 import com.example.ui.theme.Midnight
 import com.example.ui.theme.Obsidian
 import com.example.viewmodel.AuraViewModel
@@ -61,10 +65,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // STEP 1 (MANDATORY): Configure Firebase App Check with launch intent before UI/ViewModels
         configureAppCheck(this, intent)
 
-        // STEP 2: Enable Edge-to-Edge with dark luxury system bars
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
@@ -114,19 +116,19 @@ fun AuraMainApp(viewModel: AuraViewModel) {
     val isRepeat by viewModel.isRepeat.collectAsStateWithLifecycle()
     val spectrumBars by viewModel.spectrumBars.collectAsStateWithLifecycle()
     val dspStatus by viewModel.dspStatus.collectAsStateWithLifecycle()
-    val homeMoodFilter by viewModel.homeMoodFilter.collectAsStateWithLifecycle()
+    val homeFilter by viewModel.homeMoodFilter.collectAsStateWithLifecycle()
     val globalSearch by viewModel.globalSearchQuery.collectAsStateWithLifecycle()
     val audioSettings by viewModel.audioSettings.collectAsStateWithLifecycle()
     val aiPlaylistState by viewModel.aiPlaylistState.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
     val isCopilotTyping by viewModel.isCopilotTyping.collectAsStateWithLifecycle()
+    val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
+    val sleepTimerMinutes by viewModel.sleepTimerMinutes.collectAsStateWithLifecycle()
     val permissionStatuses by viewModel.permissionStatuses.collectAsStateWithLifecycle()
     val toastBanner by viewModel.toastBanner.collectAsStateWithLifecycle()
     val billingState by viewModel.billingState.collectAsStateWithLifecycle()
     val isProUnlocked by viewModel.isProUnlocked.collectAsStateWithLifecycle()
-    val hasDismissedOnboarding by viewModel.hasDismissedOnboarding.collectAsStateWithLifecycle()
     val showPaywallDialog by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
-    val isRemixGenerating by viewModel.isRemixGenerating.collectAsStateWithLifecycle()
 
     val allPermissionsGranted = permissionStatuses.all { it.isGranted }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -137,6 +139,7 @@ fun AuraMainApp(viewModel: AuraViewModel) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 if (skippedFirstResume) {
                     viewModel.refreshBilling()
+                    viewModel.refreshPermissions()
                 } else {
                     skippedFirstResume = true
                 }
@@ -161,17 +164,38 @@ fun AuraMainApp(viewModel: AuraViewModel) {
         }
     }
 
+    val accentColor = remember(currentTrack) {
+        currentTrack?.let { Color(it.primaryColorHex) } ?: GoldBright
+    }
+
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val showMiniPlayer = currentTrack != null && currentRoute != AuraRoutes.PLAYER
+    val topOverlayPadding = statusBarTop + 58.dp
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(DeepBlue.copy(alpha = 0.45f), Obsidian, Midnight)
+                    colors = listOf(DeepBlue.copy(alpha = 0.48f), Obsidian, Midnight)
                 )
             )
     ) {
+        // Animated floating ambient shapes across the whole app
+        FloatingAmbientBackground(
+            accentColor = accentColor,
+            isPlaying = isPlaying
+        )
+
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isCompact = maxWidth < 600.dp
+            val bottomOverlayPadding = when {
+                isCompact && showMiniPlayer -> navBarBottom + 134.dp
+                isCompact -> navBarBottom + 78.dp
+                showMiniPlayer -> navBarBottom + 74.dp
+                else -> navBarBottom + 16.dp
+            }
 
             Row(modifier = Modifier.fillMaxSize()) {
                 if (!isCompact) {
@@ -183,74 +207,38 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                     )
                 }
 
-                Scaffold(
-                    containerColor = Color.Transparent,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    topBar = {
-                        AuraTopHeader(
-                            searchQuery = globalSearch,
-                            onSearchChange = { q ->
-                                viewModel.setGlobalSearchQuery(q)
-                                if (q.isNotBlank() && currentRoute != AuraRoutes.LIBRARY) {
-                                    navigateTo(AuraRoutes.LIBRARY)
-                                }
-                            },
-                            onInstantAiMix = {
-                                viewModel.triggerInstantAiMix {
-                                    navigateTo(AuraRoutes.PLAYER)
-                                }
-                            },
-                            onOpenPermissions = { navigateTo(AuraRoutes.PERMISSIONS) },
-                            allPermissionsGranted = allPermissionsGranted,
-                            isProUnlocked = isProUnlocked,
-                            showSearchBar = !isCompact
-                        )
-                    },
-                    bottomBar = {
-                        Column {
-                            if (currentRoute != AuraRoutes.PLAYER) {
-                                AuraMiniPlayer(
-                                    track = currentTrack,
-                                    isPlaying = isPlaying,
-                                    positionSec = positionSec,
-                                    onTogglePlay = viewModel::togglePlayPause,
-                                    onNext = viewModel::nextTrack,
-                                    onPrevious = viewModel::previousTrack,
-                                    onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) }
-                                )
-                            }
-                            if (isCompact) {
-                                AuraBottomNavBar(
-                                    currentRoute = currentRoute,
-                                    onNavigate = navigateTo
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { innerPadding ->
+                // Full-bleed layered content box so scrollable items glide beneath the frosted top header & floating bars
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
                     NavHost(
                         navController = navController,
                         startDestination = AuraRoutes.HOME,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         composable(AuraRoutes.HOME) {
                             HomeScreen(
                                 tracks = tracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
-                                isProUnlocked = isProUnlocked,
-                                hasDismissedOnboarding = hasDismissedOnboarding,
+                                isScanning = isScanning,
                                 hapticEnabled = audioSettings.hapticFeedbackEnabled,
-                                selectedMood = homeMoodFilter,
-                                onMoodSelected = viewModel::setHomeMoodFilter,
+                                selectedFilter = homeFilter,
+                                topOverlayPadding = topOverlayPadding,
+                                bottomOverlayPadding = bottomOverlayPadding,
+                                onFilterSelected = viewModel::setHomeMoodFilter,
                                 onPlayTrack = { track -> viewModel.playTrack(track) },
-                                onPlayTrackById = { id -> viewModel.playTrackById(id) },
+                                onTogglePlayPause = viewModel::togglePlayPause,
                                 onToggleLike = viewModel::toggleLike,
-                                onDismissOnboarding = viewModel::dismissOnboarding,
-                                onReopenOnboarding = viewModel::reopenOnboarding,
+                                onScanDeviceAudio = viewModel::scanDeviceAudioFiles,
+                                onImportSafUri = { uri ->
+                                    viewModel.importAudioUriSaf(uri)
+                                    navigateTo(AuraRoutes.PLAYER)
+                                },
+                                onRefreshPermissions = viewModel::refreshPermissions,
+                                onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) },
                                 onOpenStudio = { navigateTo(AuraRoutes.STUDIO) },
                                 onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
                             )
@@ -266,22 +254,24 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                                 isShuffle = isShuffle,
                                 isRepeat = isRepeat,
                                 isProUnlocked = isProUnlocked,
-                                isRemixGenerating = isRemixGenerating,
+                                sleepTimerMinutes = sleepTimerMinutes,
                                 spectrumBars = spectrumBars,
+                                topOverlayPadding = topOverlayPadding,
+                                bottomOverlayPadding = bottomOverlayPadding,
                                 onTogglePlay = viewModel::togglePlayPause,
                                 onNext = viewModel::nextTrack,
                                 onPrevious = viewModel::previousTrack,
                                 onSeekFraction = viewModel::seekToFraction,
-                                onSeekSeconds = viewModel::seekToSeconds,
                                 onVolumeChange = viewModel::setVolume,
                                 onToggleMute = viewModel::toggleMute,
                                 onToggleShuffle = viewModel::toggleShuffle,
                                 onToggleRepeat = viewModel::toggleRepeat,
-                                onToggleLike = { viewModel.toggleLike(currentTrack) },
-                                onExtendBeat60s = viewModel::extendBeat60s,
+                                onToggleLike = { currentTrack?.let(viewModel::toggleLike) },
+                                onCycleSleepTimer = viewModel::cycleSleepTimer,
                                 onIsolateVocals = viewModel::isolateVocals,
                                 onHarmonicTransition = viewModel::harmonicDjTransition,
-                                onGenerateRemix = viewModel::generateSimilarRemix
+                                onTriggerInstantAiMix = { viewModel.triggerInstantAiMix() },
+                                onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
                             )
                         }
 
@@ -292,6 +282,8 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                                 chatMessages = chatMessages,
                                 isCopilotTyping = isCopilotTyping,
                                 isProUnlocked = isProUnlocked,
+                                topOverlayPadding = topOverlayPadding,
+                                bottomOverlayPadding = bottomOverlayPadding,
                                 onOpenPaywall = viewModel::openPaywall,
                                 onGeneratePlaylist = viewModel::generateAiPlaylist,
                                 onPlayGeneratedMix = {
@@ -311,10 +303,13 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                             LibraryScreen(
                                 tracks = tracks,
                                 currentTrack = currentTrack,
+                                isScanning = isScanning,
                                 globalSearch = globalSearch,
+                                topOverlayPadding = topOverlayPadding,
+                                bottomOverlayPadding = bottomOverlayPadding,
                                 onPlayTrack = { track -> viewModel.playTrack(track) },
-                                onPlayTrackById = { id -> viewModel.playTrackById(id) },
                                 onToggleLike = viewModel::toggleLike,
+                                onDeleteTrack = viewModel::deleteTrack,
                                 onScanDeviceAudio = viewModel::scanDeviceAudioFiles,
                                 onImportSafUri = { uri ->
                                     viewModel.importAudioUriSaf(uri)
@@ -328,6 +323,8 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                             EqualizerScreen(
                                 settings = audioSettings,
                                 dspStatus = dspStatus,
+                                topOverlayPadding = topOverlayPadding,
+                                bottomOverlayPadding = bottomOverlayPadding,
                                 onBandChange = viewModel::updateEqBand,
                                 onSelectPreset = viewModel::applyEqPreset,
                                 onToggleCrossfade = viewModel::toggleCrossfade,
@@ -340,12 +337,61 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                         composable(AuraRoutes.PERMISSIONS) {
                             PermissionsScreen(
                                 permissionStatuses = permissionStatuses,
+                                topOverlayPadding = topOverlayPadding,
+                                bottomOverlayPadding = bottomOverlayPadding,
                                 onRefreshPermissions = viewModel::refreshPermissions,
                                 onImportSafUri = { uri ->
                                     viewModel.importAudioUriSaf(uri)
                                     navigateTo(AuraRoutes.PLAYER)
                                 },
                                 onScanDeviceAudio = viewModel::scanDeviceAudioFiles
+                            )
+                        }
+                    }
+
+                    // Frosted translucent top header floating OVER scrollable content
+                    AuraTopHeader(
+                        searchQuery = globalSearch,
+                        onSearchChange = { q ->
+                            viewModel.setGlobalSearchQuery(q)
+                            if (q.isNotBlank() && currentRoute != AuraRoutes.LIBRARY) {
+                                navigateTo(AuraRoutes.LIBRARY)
+                            }
+                        },
+                        onOpenSearch = { navigateTo(AuraRoutes.LIBRARY) },
+                        onInstantAiMix = {
+                            viewModel.triggerInstantAiMix {
+                                navigateTo(AuraRoutes.PLAYER)
+                            }
+                        },
+                        onOpenPermissions = { navigateTo(AuraRoutes.PERMISSIONS) },
+                        allPermissionsGranted = allPermissionsGranted,
+                        isProUnlocked = isProUnlocked,
+                        isPlaying = isPlaying,
+                        showSearchBar = !isCompact,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+
+                    // Floating Mini-Player + Floating Pill Nav Bar
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (showMiniPlayer) {
+                            AuraMiniPlayer(
+                                track = currentTrack,
+                                isPlaying = isPlaying,
+                                positionSec = positionSec,
+                                onTogglePlay = viewModel::togglePlayPause,
+                                onNext = viewModel::nextTrack,
+                                onPrevious = viewModel::previousTrack,
+                                onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) }
+                            )
+                        }
+                        if (isCompact) {
+                            AuraBottomNavBar(
+                                currentRoute = currentRoute,
+                                onNavigate = navigateTo
                             )
                         }
                     }

@@ -83,16 +83,16 @@ jobs:
             --ks-pass pass:android \
             --ks-key-alias androiddebugkey \
             --key-pass pass:android \
-            --out EmsPlayer.apk \
+            --out EmPlayer.apk \
             app-aligned.apk
-          "$BT_DIR/apksigner" verify -v --min-sdk-version 21 EmsPlayer.apk
-          ls -lh EmsPlayer.apk
+          "$BT_DIR/apksigner" verify -v --min-sdk-version 21 EmPlayer.apk
+          ls -lh EmPlayer.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EmsPlayer-apk
-          path: EmsPlayer.apk
+          name: EmPlayer-apk
+          path: EmPlayer.apk
           if-no-files-found: error
 
       - name: Publish Direct APK to GitHub Releases
@@ -100,9 +100,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest EmsPlayer.apk --clobber
+            gh release upload latest EmPlayer.apk --clobber
           else
-            gh release create latest EmsPlayer.apk \
-              --title "Ems Player APK" \
-              --notes "APK Android Ems Player (signé v1 + v2, compatible Android 6.0+)."
+            gh release create latest EmPlayer.apk \
+              --title "Em Player APK" \
+              --notes "APK Android Em Player (signé v1 + v2, compatible Android 6.0+)."
           fi

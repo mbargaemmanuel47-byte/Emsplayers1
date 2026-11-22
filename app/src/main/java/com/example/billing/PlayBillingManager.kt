@@ -223,9 +223,9 @@ class PlayBillingManager(
                     loadedOptions.add(
                         BillingProductOption(
                             productId = details.productId,
-                            title = details.title.ifBlank { "Ems Player Pro IA (Abonnement)" },
+                            title = details.title.ifBlank { "Em Player Pro (Abonnement)" },
                             description = details.description.ifBlank {
-                                "Génération musicale IA Gemini, Remix sur mesure et Co-Pilote DJ illimité."
+                                "Playlists intelligentes et assistant musical."
                             },
                             formattedPrice = phase.formattedPrice,
                             billingPeriodLabel = formatBillingPeriod(phase.billingPeriod),
@@ -259,9 +259,9 @@ class PlayBillingManager(
                     loadedOptions.add(
                         BillingProductOption(
                             productId = details.productId,
-                            title = details.title.ifBlank { "Ems Player Studio IA (Accès À Vie)" },
+                            title = details.title.ifBlank { "Em Player Pro (Accès À Vie)" },
                             description = details.description.ifBlank {
-                                "Déblocage permanent de la génération musicale IA et des remixes Gemini."
+                                "Accès complet au Studio musical intelligent."
                             },
                             formattedPrice = offer.formattedPrice,
                             billingPeriodLabel = "Achat unique",
@@ -277,7 +277,7 @@ class PlayBillingManager(
             state.copy(
                 products = loadedOptions,
                 statusMessage = if (loadedOptions.isEmpty() && state.isStoreAvailable) {
-                    "Offres Play Store ($SUBSCRIPTION_PRODUCT_ID / $LIFETIME_PRODUCT_ID) en attente de publication dans la Google Play Console."
+                    "Offres momentanément indisponibles."
                 } else {
                     state.statusMessage
                 }
@@ -376,7 +376,7 @@ class PlayBillingManager(
                 isProUnlocked = unlocked,
                 isPendingPurchase = pending,
                 statusMessage = when {
-                    unlocked -> "Ems Player Pro IA actif."
+                    unlocked -> "Em Player Pro actif."
                     pending -> "Paiement en attente de validation par Google Play."
                     else -> state.statusMessage
                 }

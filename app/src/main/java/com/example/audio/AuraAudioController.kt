@@ -36,7 +36,7 @@ class AuraAudioController(
     private val _currentPositionSec = MutableStateFlow(0f)
     val currentPositionSec: StateFlow<Float> = _currentPositionSec.asStateFlow()
 
-    private val _volume = MutableStateFlow(0.8f)
+    private val _volume = MutableStateFlow(0.85f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
     private val _isMuted = MutableStateFlow(false)
@@ -48,10 +48,10 @@ class AuraAudioController(
     private val _isRepeat = MutableStateFlow(false)
     val isRepeat: StateFlow<Boolean> = _isRepeat.asStateFlow()
 
-    private val _spectrumBars = MutableStateFlow(List(42) { 0.06f })
+    private val _spectrumBars = MutableStateFlow(List(36) { 0.08f })
     val spectrumBars: StateFlow<List<Float>> = _spectrumBars.asStateFlow()
 
-    private val _dspStatus = MutableStateFlow("Prêt (Appuyez sur Lecture)")
+    private val _dspStatus = MutableStateFlow("Prêt")
     val dspStatus: StateFlow<String> = _dspStatus.asStateFlow()
 
     private var activeTrack: Track? = null
@@ -71,51 +71,38 @@ class AuraAudioController(
     var onTrackFinishedCallback: (() -> Unit)? = null
     var onPlaybackErrorCallback: ((String) -> Unit)? = null
 
-    private val synthEngine = ProceduralSynthEngine(
-        scope = scope,
-        onSpectrumUpdate = { bars -> _spectrumBars.value = bars },
-        onSessionIdReady = { sessionId -> attachAudioEffects(sessionId) },
-        onError = { msg ->
-            _isPlaying.value = false
-            _dspStatus.value = "Erreur AudioTrack"
-            onPlaybackErrorCallback?.invoke(msg)
-        }
-    )
+    private var activeTrackDurationMs: Long = 0L
 
     fun playTrack(track: Track, startPositionSec: Float = 0f) {
         transitionJob?.cancel()
+        val uriStr = track.localUri
+        if (uriStr.isNullOrBlank()) {
+            _isPlaying.value = false
+            _dspStatus.value = "Fichier introuvable"
+            onPlaybackErrorCallback?.invoke("Erreur : ce fichier audio n'est pas disponible.")
+            return
+        }
+
         activeTrack = track
+        activeTrackDurationMs = (track.durationSec.toLong().coerceAtLeast(0L)) * 1000L
         _currentPositionSec.value = startPositionSec
         analyzedSpectrum = null
         analyzerJob?.cancel()
 
         if (!requestAudioFocus()) {
             _isPlaying.value = false
-            _dspStatus.value = "Focus audio refusé par le système"
-            onPlaybackErrorCallback?.invoke("Impossible d'obtenir le focus audio système.")
+            _dspStatus.value = "Son bloqué"
+            onPlaybackErrorCallback?.invoke("Erreur : le son est utilisé par une autre application.")
             return
         }
 
         stopEnginesOnly()
         _isPlaying.value = true
-        currentCrossfadeGain = if (currentAudioSettings.crossfadeEnabled) 0.20f else 1.0f
+        currentCrossfadeGain = if (currentAudioSettings.crossfadeEnabled) 0.25f else 1.0f
 
-        if (track.localUri != null) {
-            startLocalMediaPlayer(track, startPositionSec)
-        } else {
-            synthEngine.updateVolume(if (_isMuted.value) 0f else _volume.value)
-            synthEngine.updateCrossfadeGain(currentCrossfadeGain)
-            synthEngine.updateEqGains(currentAudioSettings.eqGainsDb)
-            synthEngine.updateDspOptions(
-                spatial = currentAudioSettings.spatial3dEnabled,
-                normalize = currentAudioSettings.normalizeEnabled
-            )
-            synthEngine.start(track, startPositionSec)
-            _dspStatus.value = "Actif • Synthèse 48kHz DSP"
-        }
-
+        startLocalMediaPlayer(track, uriStr, startPositionSec)
         startProgressLoop()
-        AuraPlaybackService.updateNotification(context, track.title, track.artist, true)
+        pushNotificationUpdate(track, isPlaying = true, positionMs = (startPositionSec * 1000f).toLong())
     }
 
     fun pause() {
@@ -124,28 +111,38 @@ class AuraAudioController(
         runCatching {
             mediaPlayer?.takeIf { it.isPlaying }?.pause()
         }
-        synthEngine.stop()
         progressJob?.cancel()
-        _spectrumBars.value = List(42) { 0.06f }
-        _dspStatus.value = "En pause • DSP en veille"
+        _spectrumBars.value = List(36) { 0.08f }
+        _dspStatus.value = "En pause"
         activeTrack?.let {
-            AuraPlaybackService.updateNotification(context, it.title, it.artist, false)
+            pushNotificationUpdate(it, isPlaying = false, positionMs = (_currentPositionSec.value * 1000f).toLong())
         }
+    }
+
+    fun pauseWithoutNotification() {
+        transitionJob?.cancel()
+        _isPlaying.value = false
+        runCatching {
+            mediaPlayer?.takeIf { it.isPlaying }?.pause()
+        }
+        progressJob?.cancel()
+        _spectrumBars.value = List(36) { 0.08f }
+        _dspStatus.value = "En pause"
     }
 
     fun resume(fallbackTrack: Track?) {
         val target = activeTrack ?: fallbackTrack ?: return
         if (!requestAudioFocus()) {
-            onPlaybackErrorCallback?.invoke("Focus audio indisponible.")
+            onPlaybackErrorCallback?.invoke("Erreur d'accès à la sortie audio.")
             return
         }
 
-        if (target.localUri != null && mediaPlayer != null) {
+        if (mediaPlayer != null) {
             _isPlaying.value = true
             runCatching { mediaPlayer?.start() }
             startProgressLoop()
-            _dspStatus.value = "Actif • MediaPlayer AudioFX"
-            AuraPlaybackService.updateNotification(context, target.title, target.artist, true)
+            _dspStatus.value = "Lecture"
+            pushNotificationUpdate(target, isPlaying = true, positionMs = (_currentPositionSec.value * 1000f).toLong())
         } else {
             val savedPos = _currentPositionSec.value
             playTrack(target, startPositionSec = savedPos)
@@ -154,21 +151,36 @@ class AuraAudioController(
 
     fun seekToFraction(fraction: Float) {
         val track = activeTrack ?: return
-        val newSec = (fraction.coerceIn(0f, 1f) * track.durationSec)
+        val effectiveDurationSec = if (track.durationSec > 0) track.durationSec else (activeTrackDurationMs / 1000L).toInt()
+        val newSec = (fraction.coerceIn(0f, 1f) * effectiveDurationSec.coerceAtLeast(1))
         seekToSeconds(newSec)
     }
 
     fun seekToSeconds(sec: Float) {
         val track = activeTrack ?: return
-        val clamped = sec.coerceIn(0f, track.durationSec.toFloat().coerceAtLeast(1f))
+        val maxSec = maxOf(track.durationSec.toFloat(), activeTrackDurationMs / 1000f, 1f)
+        val clamped = sec.coerceIn(0f, maxSec)
         _currentPositionSec.value = clamped
-        if (track.localUri != null) {
-            mediaPlayer?.let { mp ->
-                runCatching { mp.seekTo((clamped * 1000).toInt()) }
-            }
-        } else {
-            synthEngine.seekToSeconds(clamped)
+        mediaPlayer?.let { mp ->
+            runCatching { mp.seekTo((clamped * 1000).toInt()) }
         }
+        pushNotificationUpdate(track, isPlaying = _isPlaying.value, positionMs = (clamped * 1000f).toLong())
+    }
+
+    private fun pushNotificationUpdate(track: Track, isPlaying: Boolean, positionMs: Long) {
+        val durationMs = if (activeTrackDurationMs > 0L) activeTrackDurationMs else (track.durationSec.toLong().coerceAtLeast(0L) * 1000L)
+        AuraPlaybackService.updateNotification(
+            context = context,
+            title = track.title,
+            artist = track.artist,
+            isPlaying = isPlaying,
+            album = track.album,
+            durationMs = durationMs,
+            positionMs = positionMs,
+            primaryColorHex = track.primaryColorHex,
+            secondaryColorHex = track.secondaryColorHex,
+            tertiaryColorHex = track.tertiaryColorHex
+        )
     }
 
     fun setVolume(vol: Float) {
@@ -193,16 +205,7 @@ class AuraAudioController(
 
     fun updateAudioSettings(settings: AudioSettingsState) {
         currentAudioSettings = settings
-        synthEngine.updateEqGains(settings.eqGainsDb)
-        synthEngine.updateDspOptions(
-            spatial = settings.spatial3dEnabled,
-            normalize = settings.normalizeEnabled
-        )
         applyHardwareEffects(settings)
-    }
-
-    fun updateActiveTrackDuration(newDurationSec: Int) {
-        activeTrack = activeTrack?.copy(durationSec = newDurationSec)
     }
 
     fun fadeOutAndSwitch(onReadyToSwitch: () -> Unit) {
@@ -225,17 +228,14 @@ class AuraAudioController(
     private fun applyEffectiveVolume() {
         val base = if (_isMuted.value) 0f else _volume.value
         val effective = (base * currentCrossfadeGain).coerceIn(0f, 1f)
-        synthEngine.updateVolume(base)
-        synthEngine.updateCrossfadeGain(currentCrossfadeGain)
         runCatching { mediaPlayer?.setVolume(effective, effective) }
     }
 
-    private fun startLocalMediaPlayer(track: Track, startPositionSec: Float) {
-        val uri = Uri.parse(track.localUri)
+    private fun startLocalMediaPlayer(track: Track, uriStr: String, startPositionSec: Float) {
+        val uri = Uri.parse(uriStr)
 
-        // Decode real PCM spectrum timeline asynchronously without requiring RECORD_AUDIO
         analyzerJob = scope.launch {
-            analyzedSpectrum = LocalAudioSpectrumAnalyzer.analyze(context, uri)
+            analyzedSpectrum = LocalAudioSpectrumAnalyzer.analyze(context, uri, barCount = 36)
         }
 
         try {
@@ -252,11 +252,16 @@ class AuraAudioController(
                 setVolume(effective, effective)
                 setOnPreparedListener { player ->
                     attachAudioEffects(player.audioSessionId)
+                    val realDuration = runCatching { player.duration.toLong() }.getOrDefault(0L)
+                    if (realDuration > 0L) {
+                        activeTrackDurationMs = realDuration
+                    }
                     if (startPositionSec > 0f) {
                         runCatching { player.seekTo((startPositionSec * 1000).toInt()) }
                     }
                     player.start()
-                    _dspStatus.value = "Actif • Fichier Local AudioFX"
+                    _dspStatus.value = "Lecture"
+                    pushNotificationUpdate(track, isPlaying = true, positionMs = (startPositionSec * 1000f).toLong())
                 }
                 setOnCompletionListener { player ->
                     if (_isRepeat.value) {
@@ -270,11 +275,11 @@ class AuraAudioController(
                     }
                 }
                 setOnErrorListener { _, what, extra ->
-                    Log.e(TAG, "MediaPlayer error what=$what extra=$extra for uri=$uri")
+                    Log.e(TAG, "Playback error what=$what extra=$extra for uri=$uri")
                     _isPlaying.value = false
-                    _spectrumBars.value = List(42) { 0.06f }
-                    _dspStatus.value = "Erreur lecture fichier ($what)"
-                    onPlaybackErrorCallback?.invoke("Impossible de lire ce fichier audio (code $what).")
+                    _spectrumBars.value = List(36) { 0.08f }
+                    _dspStatus.value = "Erreur lecture"
+                    onPlaybackErrorCallback?.invoke("Erreur de lecture de ce fichier audio.")
                     true
                 }
                 prepareAsync()
@@ -283,9 +288,9 @@ class AuraAudioController(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open local audio URI: $uri", e)
             _isPlaying.value = false
-            _spectrumBars.value = List(42) { 0.06f }
-            _dspStatus.value = "Fichier audio inaccessible"
-            onPlaybackErrorCallback?.invoke(e.localizedMessage ?: "Fichier audio introuvable ou autorisation révoquée.")
+            _spectrumBars.value = List(36) { 0.08f }
+            _dspStatus.value = "Fichier inaccessible"
+            onPlaybackErrorCallback?.invoke("Erreur d'ouverture : fichier introuvable ou accès refusé.")
         }
     }
 
@@ -339,42 +344,22 @@ class AuraAudioController(
             while (isActive && _isPlaying.value) {
                 delay(180L)
                 val track = activeTrack ?: continue
-                val mp = mediaPlayer
+                val mp = mediaPlayer ?: continue
 
-                val posSec = if (track.localUri != null && mp != null) {
-                    val ms = runCatching {
-                        if (mp.isPlaying) mp.currentPosition else (_currentPositionSec.value * 1000f).toInt()
-                    }.getOrDefault(0)
-                    val sec = ms / 1000f
-                    _currentPositionSec.value = sec
+                val ms = runCatching {
+                    if (mp.isPlaying) mp.currentPosition else (_currentPositionSec.value * 1000f).toInt()
+                }.getOrDefault(0)
+                val posSec = ms / 1000f
+                _currentPositionSec.value = posSec
 
-                    // Drive visualizer from decoded real PCM energy timeline
-                    val timeline = analyzedSpectrum
-                    if (timeline != null) {
-                        _spectrumBars.value = timeline.barsAt(ms.toLong())
-                    } else {
-                        val level = ((if (_isMuted.value) 0f else _volume.value) * 0.45f).coerceIn(0.08f, 0.6f)
-                        _spectrumBars.value = List(42) { level }
-                    }
-                    sec
+                val timeline = analyzedSpectrum
+                if (timeline != null) {
+                    _spectrumBars.value = timeline.barsAt(ms.toLong())
                 } else {
-                    val nextPos = _currentPositionSec.value + 0.18f
-                    if (nextPos >= track.durationSec) {
-                        if (_isRepeat.value) {
-                            _currentPositionSec.value = 0f
-                            synthEngine.seekToSeconds(0f)
-                            0f
-                        } else {
-                            onTrackFinishedCallback?.invoke()
-                            break
-                        }
-                    } else {
-                        _currentPositionSec.value = nextPos
-                        nextPos
-                    }
+                    val level = ((if (_isMuted.value) 0f else _volume.value) * 0.42f).coerceIn(0.08f, 0.55f)
+                    _spectrumBars.value = List(36) { level }
                 }
 
-                // Real-time crossfade gain envelope (2.0s fade-in, 3.5s fade-out)
                 if (currentAudioSettings.crossfadeEnabled && track.durationSec > 8) {
                     val fadeIn = (posSec / 2.0f).coerceIn(0.15f, 1.0f)
                     val remaining = (track.durationSec - posSec).coerceAtLeast(0f)
@@ -423,7 +408,6 @@ class AuraAudioController(
 
     private fun stopEnginesOnly() {
         progressJob?.cancel()
-        synthEngine.stop()
         runCatching {
             mediaPlayer?.stop()
             mediaPlayer?.release()

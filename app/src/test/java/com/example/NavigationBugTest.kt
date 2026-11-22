@@ -1,7 +1,6 @@
 package com.example
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -21,50 +20,47 @@ class NavigationBugTest {
     @Test
     fun `navigate away from home to every tab and return cleanly to home`() {
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_home").assertIsSelected()
-        composeTestRule.onNodeWithTag("quick_start_onboarding_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_import_btn").assertIsDisplayed()
 
         // Studio -> Home
         composeTestRule.onNodeWithTag("nav_studio").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_studio").assertIsSelected()
+        composeTestRule.onNodeWithTag("studio_prompt_input").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_home").assertIsSelected()
-        composeTestRule.onNodeWithTag("quick_start_onboarding_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
 
         // Player -> Home
         composeTestRule.onNodeWithTag("nav_player").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_player").assertIsSelected()
+        composeTestRule.onNodeWithTag("player_open_library_btn").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_home").assertIsSelected()
-        composeTestRule.onNodeWithTag("quick_start_onboarding_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
 
         // Library -> Equalizer -> Home
         composeTestRule.onNodeWithTag("nav_library").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_library").assertIsSelected()
+        composeTestRule.onNodeWithTag("saf_import_audio_btn").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_equalizer").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_equalizer").assertIsSelected()
+        composeTestRule.onNodeWithTag("eq_preset_flat").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_home").assertIsSelected()
-        composeTestRule.onNodeWithTag("quick_start_onboarding_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
 
         // Permissions -> Home
         composeTestRule.onNodeWithTag("permissions_center_button").performClick()
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("open_app_settings_btn").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("nav_home").assertIsSelected()
-        composeTestRule.onNodeWithTag("quick_start_onboarding_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
     }
 }

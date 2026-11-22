@@ -1,13 +1,11 @@
 package com.example.ui.screens
 
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -43,13 +42,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.permissions.AndroidPermissionStatus
 import com.example.permissions.PermissionManager
 import com.example.ui.theme.BorderGold
-import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.CardDarkSurface
 import com.example.ui.theme.DeepBlue
 import com.example.ui.theme.EmeraldAccent
@@ -62,6 +62,8 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun PermissionsScreen(
     permissionStatuses: List<AndroidPermissionStatus>,
+    topOverlayPadding: Dp,
+    bottomOverlayPadding: Dp,
     onRefreshPermissions: () -> Unit,
     onImportSafUri: (Uri) -> Unit,
     onScanDeviceAudio: () -> Unit,
@@ -71,14 +73,18 @@ fun PermissionsScreen(
 
     val singlePermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) {
+    ) { granted ->
         onRefreshPermissions()
+        if (granted) onScanDeviceAudio()
     }
 
     val multiPermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
         onRefreshPermissions()
+        if (PermissionManager.hasAudioLibraryPermission(context)) {
+            onScanDeviceAudio()
+        }
     }
 
     val safLauncher = rememberLauncherForActivityResult(
@@ -91,69 +97,83 @@ fun PermissionsScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(
+            start = 14.dp,
+            end = 14.dp,
+            top = topOverlayPadding + 10.dp,
+            bottom = bottomOverlayPadding + 14.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .background(Brush.linearGradient(listOf(DeepBlue, CardDarkSurface)))
-                    .border(1.dp, BorderGold, RoundedCornerShape(24.dp))
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .border(1.dp, BorderGold, RoundedCornerShape(18.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = GoldBright, modifier = Modifier.size(28.dp))
-                    Column {
-                        Text(stringResource(R.string.perm_title), style = MaterialTheme.typography.titleLarge, color = Color.White)
-                        Text(
-                            text = "Appareil : Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) • minSdk 23 / targetSdk 36",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = GoldLight
-                        )
-                    }
+                    Icon(Icons.Filled.VerifiedUser, contentDescription = null, tint = GoldBright, modifier = Modifier.size(22.dp))
+                    Text(stringResource(R.string.perm_title), style = MaterialTheme.typography.titleMedium, color = Color.White)
                 }
                 Text(
                     text = stringResource(R.string.perm_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (pendingPermissions.isNotEmpty()) {
                         Button(
                             onClick = { multiPermLauncher.launch(pendingPermissions) },
                             colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier
                                 .weight(1f)
+                                .height(38.dp)
                                 .testTag("grant_all_permissions_btn")
                         ) {
-                            Icon(Icons.Filled.Security, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Tout autoriser (${pendingPermissions.size})", fontSize = 12.sp)
+                            Icon(Icons.Filled.Security, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Tout autoriser",
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
                     OutlinedButton(
                         onClick = { PermissionManager.openAppSettings(context) },
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .height(38.dp)
                             .testTag("open_app_settings_btn")
                     ) {
-                        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Paramètres OS", fontSize = 12.sp)
+                        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Paramètres",
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -163,49 +183,45 @@ fun PermissionsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkSurface.copy(alpha = 0.92f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CardDarkSurface.copy(alpha = 0.88f))
                     .border(
                         1.dp,
-                        if (item.isGranted) EmeraldAccent.copy(alpha = 0.45f) else BorderGold,
-                        RoundedCornerShape(20.dp)
+                        if (item.isGranted) EmeraldAccent.copy(alpha = 0.4f) else BorderGold,
+                        RoundedCornerShape(14.dp)
                     )
-                    .padding(16.dp),
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(
                     imageVector = if (item.isGranted) Icons.Filled.CheckCircle else Icons.Filled.WarningAmber,
                     contentDescription = null,
                     tint = if (item.isGranted) EmeraldAccent else GoldBright,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(20.dp)
                 )
 
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = stringResource(item.titleResId),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Text(
-                            text = item.minApiNote,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = GoldLight,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                    Text(item.description, style = MaterialTheme.typography.bodyMedium, fontSize = 12.sp, color = TextMuted)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stringResource(item.titleResId),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = item.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = TextMuted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Text(
                         text = if (item.isGranted) stringResource(R.string.perm_granted) else stringResource(R.string.perm_denied),
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        softWrap = false,
                         color = if (item.isGranted) EmeraldAccent else GoldBright
                     )
                 }
@@ -214,61 +230,65 @@ fun PermissionsScreen(
                     Button(
                         onClick = { singlePermLauncher.launch(item.manifestPermission) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier.testTag("grant_perm_${item.kind.name}")
                     ) {
-                        Text(stringResource(R.string.perm_grant_cta), fontSize = 12.sp)
+                        Text(
+                            text = stringResource(R.string.perm_grant_cta),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
         }
 
-        // Zero-permission SAF & Play Store Compliance Card
         item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkSurface.copy(alpha = 0.9f))
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Conformité Google Play & Accès Sans Permission", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                Text(
-                    "• Aucune permission large de photos/vidéos (READ_MEDIA_IMAGES / READ_MEDIA_VIDEO) déclarée.\n" +
-                        "• Service Foreground déclaré avec foregroundServiceType=\"mediaPlayback\" (Android 14–15).\n" +
-                        "• Sélecteur SAF système (OpenDocument) disponible sans autorisation de stockage.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Button(
+                    onClick = { safLauncher.launch(arrayOf("audio/*")) },
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
                 ) {
-                    Button(
-                        onClick = { safLauncher.launch(arrayOf("audio/*")) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.AudioFile, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Import SAF Audio", fontSize = 12.sp)
-                    }
-                    OutlinedButton(
-                        onClick = onScanDeviceAudio,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldLight),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Scanner Audio", fontSize = 12.sp)
-                    }
+                    Icon(Icons.Filled.AudioFile, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = stringResource(R.string.perm_saf_cta),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                OutlinedButton(
+                    onClick = onScanDeviceAudio,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldLight),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                ) {
+                    Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = stringResource(R.string.perm_scan_cta),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
-
-        item { Spacer(modifier = Modifier.height(12.dp)) }
     }
 }

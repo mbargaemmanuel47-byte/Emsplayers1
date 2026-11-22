@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -52,6 +53,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AiGenerationUiState
@@ -80,6 +83,8 @@ fun StudioScreen(
     chatMessages: List<ChatMessage>,
     isCopilotTyping: Boolean,
     isProUnlocked: Boolean,
+    topOverlayPadding: Dp,
+    bottomOverlayPadding: Dp,
     onOpenPaywall: () -> Unit,
     onGeneratePlaylist: (String, Int, Int) -> Unit,
     onPlayGeneratedMix: () -> Unit,
@@ -89,7 +94,7 @@ fun StudioScreen(
     modifier: Modifier = Modifier
 ) {
     var promptText by rememberSaveable {
-        mutableStateOf("R&B moderne avec rythme zouk doux, basse chaude et nappes nocturnes")
+        mutableStateOf("Ambiance douce et rythmée pour écouter maintenant")
     }
     var targetBpm by rememberSaveable { mutableFloatStateOf(102f) }
     var emotionalIntensity by rememberSaveable { mutableFloatStateOf(75f) }
@@ -100,28 +105,28 @@ fun StudioScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            contentPadding = PaddingValues(
+                start = 14.dp,
+                end = 14.dp,
+                top = topOverlayPadding + 10.dp,
+                bottom = bottomOverlayPadding + 14.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = "STUDIO IA EMS PLAYER • GEMINI 3.8 FLASH",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = GoldBright
-                    )
-                    Text(
-                        text = "Studio & Co-Pilote Musical IA",
-                        style = MaterialTheme.typography.headlineMedium,
+                        text = "Studio IA Em Player",
+                        style = MaterialTheme.typography.titleLarge,
                         color = Color.White
                     )
                     Text(
-                        text = if (isProUnlocked) {
-                            "Abonnement Pro actif : composez des mixes et remixes Gemini sur mesure."
+                        text = if (tracks.isEmpty()) {
+                            "Scannez ou importez d'abord vos musiques pour créer des playlists."
                         } else {
-                            "La génération musicale par IA est une fonctionnalité payante (Ems Player Pro)."
+                            "Composez des playlists et posez vos questions à partir de vos ${tracks.size} titres."
                         },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
                 }
@@ -137,12 +142,12 @@ fun StudioScreen(
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Column(
-                            modifier = Modifier.weight(1.15f),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            modifier = Modifier.weight(1.1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             GeneratorPromptCard(
                                 promptText = promptText,
@@ -188,7 +193,7 @@ fun StudioScreen(
                             onPlayRecommendedTrack = onPlayTrackById,
                             onClear = onClearChat,
                             onOpenPaywall = onOpenPaywall,
-                            modifier = Modifier.weight(0.85f)
+                            modifier = Modifier.weight(0.9f)
                         )
                     }
                 }
@@ -244,8 +249,6 @@ fun StudioScreen(
                     )
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
         }
     }
 }
@@ -255,48 +258,38 @@ private fun ProLockedBannerCard(onUnlockClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(Brush.horizontalGradient(listOf(DeepBlue, CardDarkSurface)))
-            .border(1.dp, BorderGold, RoundedCornerShape(22.dp))
-            .padding(16.dp),
+            .border(1.dp, BorderGold, RoundedCornerShape(16.dp))
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(GoldBright.copy(alpha = 0.16f))
-                .border(1.dp, BorderGold, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Lock,
-                contentDescription = "Fonctionnalité Pro payante",
-                tint = GoldBright,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Icon(Icons.Filled.Lock, contentDescription = null, tint = GoldBright, modifier = Modifier.size(20.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Ems Player Pro Requis",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
+                text = "Em Player Pro",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "La génération de musique, de remixes et le Co-Pilote IA sont réservés aux abonnés Google Play Pro.",
-                style = MaterialTheme.typography.bodyMedium,
-                fontSize = 12.sp,
-                color = TextSecondary
+                text = "Débloquez la création de mixes et l'assistant.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
         Button(
             onClick = onUnlockClick,
             colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             modifier = Modifier.testTag("studio_unlock_pro_btn")
         ) {
-            Text("Débloquer", style = MaterialTheme.typography.labelLarge, fontSize = 12.sp)
+            Text("Débloquer", fontSize = 11.sp, maxLines = 1, softWrap = false)
         }
     }
 }
@@ -316,41 +309,26 @@ private fun GeneratorPromptCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(CardDarkSurface.copy(alpha = 0.92f))
-            .border(1.dp, BorderGold, RoundedCornerShape(24.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderGold, RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "🎹 Générateur de Playlist IA",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
-            )
-            Text(
-                text = "Gemini 3.8 Flash",
-                style = MaterialTheme.typography.labelSmall,
-                color = GoldLight
-            )
-        }
+        Text("Créer une playlist", style = MaterialTheme.typography.titleSmall, color = Color.White)
 
         OutlinedTextField(
             value = promptText,
             onValueChange = onPromptChange,
             minLines = 2,
-            maxLines = 4,
-            placeholder = { Text("Décrivez une ambiance, un style ou un moment...", color = TextMuted) },
-            shape = RoundedCornerShape(18.dp),
+            maxLines = 3,
+            placeholder = { Text("Décrivez l'ambiance souhaitée...", fontSize = 12.sp, color = TextMuted) },
+            shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = GoldBright,
                 unfocusedBorderColor = BorderSubtle,
-                focusedContainerColor = Obsidian.copy(alpha = 0.8f),
-                unfocusedContainerColor = Obsidian.copy(alpha = 0.8f),
+                focusedContainerColor = Obsidian.copy(alpha = 0.78f),
+                unfocusedContainerColor = Obsidian.copy(alpha = 0.78f),
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
@@ -359,25 +337,19 @@ private fun GeneratorPromptCard(
                 .testTag("studio_prompt_input")
         )
 
-        val quickTags = listOf(
-            "Zouk & Kompa doux",
-            "Afrobeats & Amapiano",
-            "Piano Rhodes & Saxo",
-            "Synthwave Nocturne",
-            "Lo-Fi Focus 90 BPM"
-        )
+        val quickTags = listOf("Détente", "Énergie", "Soirée", "Concentration")
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             quickTags.forEach { tag ->
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                         .clickable {
                             if (!promptText.contains(tag, ignoreCase = true)) {
                                 onPromptChange(
@@ -385,33 +357,46 @@ private fun GeneratorPromptCard(
                                 )
                             }
                         }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-                    Text(
-                        text = "+ $tag",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
+                    Text("+ $tag", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = TextSecondary)
                 }
             }
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.White.copy(alpha = 0.05f))
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                    .padding(12.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.04f))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 9.dp, vertical = 6.dp)
             ) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Tempo cible", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                    Text("${targetBpm.toInt()} BPM", style = MaterialTheme.typography.labelMedium, color = GoldBright)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Rythme",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 4.dp)
+                    )
+                    Text(
+                        text = "${targetBpm.toInt()} BPM",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = GoldBright
+                    )
                 }
                 Slider(
                     value = targetBpm,
@@ -424,14 +409,32 @@ private fun GeneratorPromptCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.White.copy(alpha = 0.05f))
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                    .padding(12.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.04f))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 9.dp, vertical = 6.dp)
             ) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Émotion", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                    Text("${emotionalIntensity.toInt()}%", style = MaterialTheme.typography.labelMedium, color = GoldBright)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Intensité",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 4.dp)
+                    )
+                    Text(
+                        text = "${emotionalIntensity.toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = GoldBright
+                    )
                 }
                 Slider(
                     value = emotionalIntensity,
@@ -446,28 +449,24 @@ private fun GeneratorPromptCard(
             onClick = onGenerate,
             enabled = !isLoading,
             colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(42.dp)
                 .testTag("studio_generate_btn")
         ) {
             if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = Obsidian,
-                    strokeWidth = 2.dp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Composition IA en cours...", style = MaterialTheme.typography.labelLarge)
-            } else if (!isProUnlocked) {
-                Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Débloquer la Génération IA (Pro)", style = MaterialTheme.typography.labelLarge)
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Obsidian, strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Création en cours...", fontSize = 12.sp)
             } else {
-                Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Générer la Playlist Sur Mesure", style = MaterialTheme.typography.labelLarge)
+                Icon(
+                    imageVector = if (isProUnlocked) Icons.Filled.AutoAwesome else Icons.Filled.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Créer la playlist", fontSize = 12.sp)
             }
         }
     }
@@ -483,71 +482,72 @@ private fun GeneratedResultCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(CardDarkSurface.copy(alpha = 0.90f))
-            .border(1.dp, BorderGold, RoundedCornerShape(24.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         when (state) {
             is AiGenerationUiState.Idle -> {
-                Text("Prêt à composer votre prochaine session IA.", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                Text("Votre sélection apparaîtra ici.", style = MaterialTheme.typography.bodySmall, color = TextMuted)
             }
             is AiGenerationUiState.Loading -> {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = GoldBright, strokeWidth = 2.dp)
-                    Text("Analyse harmonique et sélection Gemini...", style = MaterialTheme.typography.bodyMedium, color = GoldLight)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = GoldBright, strokeWidth = 2.dp)
+                    Text("Préparation de la sélection...", style = MaterialTheme.typography.bodySmall, color = GoldLight)
                 }
             }
             is AiGenerationUiState.Error -> {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(RoseError.copy(alpha = 0.14f))
-                        .border(1.dp, RoseError.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                        .padding(12.dp)
+                        .border(1.dp, RoseError.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                        .padding(10.dp)
                 ) {
-                    Text("Erreur Gemini AI Logic", style = MaterialTheme.typography.labelLarge, color = RoseError)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(state.message, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    Text("Impossible de créer le mix", style = MaterialTheme.typography.labelMedium, color = RoseError)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(state.message, style = MaterialTheme.typography.bodySmall, color = Color.White)
                 }
             }
             is AiGenerationUiState.Success -> {
                 val mix = state.data
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("SESSION GÉNÉRÉE PAR EMS PLAYER IA", style = MaterialTheme.typography.labelSmall, color = GoldBright)
-                        Text(mix.title, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                        Text(
+                            text = mix.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = mix.rationale,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = TextMuted,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     Button(
                         onClick = onPlayAll,
                         colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier.testTag("studio_play_mix_btn")
                     ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Tout jouer", style = MaterialTheme.typography.labelLarge, fontSize = 12.sp)
+                        Text("Lire", fontSize = 11.sp, maxLines = 1, softWrap = false)
                     }
                 }
-
-                Text(
-                    text = "💡 ${mix.rationale}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DeepBlue.copy(alpha = 0.5f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
-                        .padding(12.dp)
-                )
 
                 mix.trackIds.forEachIndexed { idx, id ->
                     val track = tracks.find { it.id == id }
@@ -555,26 +555,39 @@ private fun GeneratedResultCard(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(11.dp))
                                 .background(Color.White.copy(alpha = 0.05f))
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
                                 .clickable { onPlayTrackById(track.id) }
-                                .padding(10.dp),
+                                .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("0${idx + 1}", style = MaterialTheme.typography.labelMedium, color = GoldBright)
-                            TrackArtworkCanvas(track = track, cornerRadius = 8.dp, modifier = Modifier.size(38.dp))
+                            Text("${idx + 1}", style = MaterialTheme.typography.labelSmall, color = GoldBright, maxLines = 1, softWrap = false)
+                            TrackArtworkCanvas(track = track, cornerRadius = 7.dp, modifier = Modifier.size(32.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(track.title, style = MaterialTheme.typography.labelLarge, color = Color.White)
-                                Text("${track.artist} • ${track.genre}", style = MaterialTheme.typography.bodyMedium, fontSize = 11.sp, color = TextMuted)
+                                Text(
+                                    text = track.title,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = track.artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 10.sp,
+                                    color = TextMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                             Text(
-                                text = if (track.bpm > 0) "${track.bpm} BPM" else "Local",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = GoldLight
+                                text = formatDuration(track.durationSec),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                softWrap = false,
+                                color = TextMuted
                             )
-                            Text(formatDuration(track.durationSec), style = MaterialTheme.typography.labelMedium, color = TextMuted)
                         }
                     }
                 }
@@ -600,62 +613,54 @@ private fun CopilotChatCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(CardDarkSurface.copy(alpha = 0.92f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(24.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(GoldBright.copy(alpha = 0.16f))
-                        .border(1.dp, BorderGold, RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("AI", style = MaterialTheme.typography.labelLarge, color = GoldBright)
-                }
-                Column {
-                    Text("Co-Pilote DJ Aura", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(EmeraldAccent))
-                        Text(
-                            text = when {
-                                !isProUnlocked -> "Verrouillé • Ems Player Pro requis"
-                                isTyping -> "Génération en direct..."
-                                else -> "En ligne • Gemini Streaming"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isProUnlocked) EmeraldAccent else GoldBright
-                        )
-                    }
-                }
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(EmeraldAccent)
+                )
+                Text(
+                    text = "Assistant Em Player",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             Text(
                 text = if (isProUnlocked) "Effacer" else "Pro",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isProUnlocked) TextMuted else GoldBright,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier
                     .clickable(onClick = if (isProUnlocked) onClear else onOpenPaywall)
-                    .padding(8.dp)
+                    .padding(4.dp)
             )
         }
 
-        // Messages list
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 180.dp, max = 380.dp)
+                .heightIn(min = 120.dp, max = 260.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             messages.takeLast(8).forEach { msg ->
                 Column(
@@ -664,38 +669,27 @@ private fun CopilotChatCard(
                 ) {
                     Column(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                if (msg.isUser) GoldBright else Color.White.copy(alpha = 0.06f)
-                            )
-                            .border(
-                                1.dp,
-                                if (msg.isUser) GoldBright else BorderSubtle,
-                                RoundedCornerShape(16.dp)
-                            )
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                            .widthIn(max = 290.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (msg.isUser) GoldBright else Color.White.copy(alpha = 0.06f))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = msg.text.ifBlank { if (msg.isStreaming) "Aura réfléchit..." else "" },
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = msg.text.ifBlank { if (msg.isStreaming) "..." else "" },
+                            style = MaterialTheme.typography.bodySmall,
                             color = if (msg.isUser) Obsidian else TextSecondary,
                             fontWeight = if (msg.isUser) FontWeight.SemiBold else FontWeight.Normal
                         )
                         if (msg.recommendedTrackId != null && !msg.isStreaming) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(GoldBright)
                                     .clickable { onPlayRecommendedTrack(msg.recommendedTrackId) }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text(
-                                    text = "▶ Lancer la piste recommandée",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontSize = 11.sp,
-                                    color = Obsidian
-                                )
+                                Text("▶ Écouter", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = Obsidian)
                             }
                         }
                     }
@@ -703,48 +697,42 @@ private fun CopilotChatCard(
             }
         }
 
-        // Quick chat suggestions
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            listOf(
-                "Analyse le morceau actuel",
-                "Crée une file d'attente Chill & Focus",
-                "Recommande un titre Zouk R&B"
-            ).forEach { suggestion ->
+            listOf("Quel titre écouter ?", "File calme", "Mes favoris").forEach { suggestion ->
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.05f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                         .clickable { onQuickPrompt(suggestion) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-                    Text(suggestion, style = MaterialTheme.typography.labelMedium, color = GoldLight)
+                    Text(suggestion, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = GoldLight)
                 }
             }
         }
 
-        // Input row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             OutlinedTextField(
                 value = chatInput,
                 onValueChange = onChatInputChange,
                 singleLine = true,
-                placeholder = { Text("Demandez à Ems Player...", color = TextMuted) },
-                shape = RoundedCornerShape(16.dp),
+                placeholder = { Text("Écrivez un message...", fontSize = 12.sp, color = TextMuted) },
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = GoldBright,
                     unfocusedBorderColor = BorderSubtle,
-                    focusedContainerColor = Obsidian.copy(alpha = 0.8f),
-                    unfocusedContainerColor = Obsidian.copy(alpha = 0.8f),
+                    focusedContainerColor = Obsidian.copy(alpha = 0.78f),
+                    unfocusedContainerColor = Obsidian.copy(alpha = 0.78f),
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
@@ -756,15 +744,16 @@ private fun CopilotChatCard(
                 onClick = onSend,
                 enabled = (!isProUnlocked || chatInput.isNotBlank()) && !isTyping,
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Brush.linearGradient(listOf(GoldBright, GoldMetallic)))
                     .testTag("studio_chat_send_btn")
             ) {
                 Icon(
                     imageVector = if (isProUnlocked) Icons.AutoMirrored.Filled.Send else Icons.Filled.Lock,
-                    contentDescription = if (isProUnlocked) "Envoyer" else "Débloquer Pro",
-                    tint = Obsidian
+                    contentDescription = "Envoyer",
+                    tint = Obsidian,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

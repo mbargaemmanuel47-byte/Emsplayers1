@@ -21,8 +21,7 @@ data class AndroidPermissionStatus(
     val titleResId: Int,
     val description: String,
     val isGranted: Boolean,
-    val requiresRuntimeRequest: Boolean,
-    val minApiNote: String
+    val requiresRuntimeRequest: Boolean
 )
 
 object PermissionManager {
@@ -53,7 +52,9 @@ object PermissionManager {
 
     fun isPermissionGranted(context: Context, permission: String?): Boolean {
         if (permission == null) return true
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        return runCatching {
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
     }
 
     fun hasAudioLibraryPermission(context: Context): Boolean {
@@ -70,40 +71,25 @@ object PermissionManager {
                 kind = PermissionKind.AUDIO_LIBRARY,
                 manifestPermission = audioPerm,
                 titleResId = com.example.R.string.perm_audio_title,
-                description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    "READ_MEDIA_AUDIO (Android 13–15) : accès granulaire à votre musique locale (MP3, FLAC, WAV) sans accès aux photos/vidéos."
-                } else {
-                    "READ_EXTERNAL_STORAGE (Android 6–12, maxSdkVersion=32) : scan sécurisé des dossiers audio locaux."
-                },
+                description = "Permet de détecter et lire les sons de votre stockage.",
                 isGranted = isPermissionGranted(context, audioPerm),
-                requiresRuntimeRequest = true,
-                minApiNote = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "API 33+" else "API 23–32"
+                requiresRuntimeRequest = true
             ),
             AndroidPermissionStatus(
                 kind = PermissionKind.NOTIFICATIONS,
                 manifestPermission = notifPerm,
                 titleResId = com.example.R.string.perm_notif_title,
-                description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    "POST_NOTIFICATIONS (Android 13–15) : lecteur média persistant, contrôles écran verrouillé et alertes Mix IA."
-                } else {
-                    "Notifications média actives automatiquement sur Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})."
-                },
+                description = "Affiche le lecteur sur l'écran de verrouillage.",
                 isGranted = isPermissionGranted(context, notifPerm),
-                requiresRuntimeRequest = notifPerm != null,
-                minApiNote = "API 33+ (Auto < 33)"
+                requiresRuntimeRequest = notifPerm != null
             ),
             AndroidPermissionStatus(
                 kind = PermissionKind.BLUETOOTH_AUDIO,
                 manifestPermission = btPerm,
                 titleResId = com.example.R.string.perm_bt_title,
-                description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    "BLUETOOTH_CONNECT (Android 12–15) : détection des casques sans fil et calibration Spatial Audio 3D."
-                } else {
-                    "Routage Bluetooth actif automatiquement via BLUETOOTH (maxSdkVersion=30) sur Android ${Build.VERSION.RELEASE}."
-                },
+                description = "Détecte vos écouteurs et enceintes Bluetooth.",
                 isGranted = isPermissionGranted(context, btPerm),
-                requiresRuntimeRequest = btPerm != null,
-                minApiNote = "API 31+ (Auto < 31)"
+                requiresRuntimeRequest = btPerm != null
             )
         )
     }

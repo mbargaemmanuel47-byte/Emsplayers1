@@ -6,13 +6,13 @@ data class LyricLine(
 )
 
 data class SynthProfile(
-    val scaleHz: List<Double>,
-    val bassHz: List<Double>,
-    val waveType: String, // "sine", "triangle", "sawtooth", "square"
-    val rhythmPattern: List<Float>,
-    val groove: Int,
-    val warmth: Int,
-    val clarity: Int
+    val scaleHz: List<Double> = emptyList(),
+    val bassHz: List<Double> = emptyList(),
+    val waveType: String = "pcm",
+    val rhythmPattern: List<Float> = emptyList(),
+    val groove: Int = 0,
+    val warmth: Int = 0,
+    val clarity: Int = 0
 )
 
 data class Track(
@@ -30,28 +30,17 @@ data class Track(
     val primaryColorHex: Long,
     val secondaryColorHex: Long,
     val tertiaryColorHex: Long,
-    val synthProfile: SynthProfile,
-    val aiInsight: String,
-    val lyrics: List<LyricLine>,
+    val synthProfile: SynthProfile = SynthProfile(),
+    val aiInsight: String = "",
+    val lyrics: List<LyricLine> = emptyList(),
     val localUri: String? = null,
-    val isAiGenerated: Boolean = false
-)
-
-data class AiMoodPreset(
-    val id: String,
-    val title: String,
-    val subtitle: String,
-    val bpmRange: String,
-    val badge: String,
-    val moodFilter: String,
-    val trackId: Long
-)
-
-data class EqBandState(
-    val index: Int,
-    val frequencyHz: Int,
-    val label: String,
-    val gainDb: Float
+    val isAiGenerated: Boolean = false,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0L,
+    val fileSizeBytes: Long = 0L,
+    val bitrateKbps: Int = 0,
+    val mimeFormat: String = "",
+    val year: String = ""
 )
 
 data class AudioSettingsState(

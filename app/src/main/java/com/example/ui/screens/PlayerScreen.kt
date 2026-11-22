@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,7 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
@@ -36,7 +37,8 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,10 +46,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +56,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -65,10 +65,11 @@ import com.example.model.Track
 import com.example.ui.components.AudioVisualizerCanvas
 import com.example.ui.components.TrackArtworkCanvas
 import com.example.ui.components.formatDuration
+import com.example.ui.components.formatFileSize
+import com.example.ui.components.formatPlayCount
 import com.example.ui.theme.BorderGold
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.CardDarkSurface
-import com.example.ui.theme.DeepBlue
 import com.example.ui.theme.EmeraldAccent
 import com.example.ui.theme.GoldBright
 import com.example.ui.theme.GoldLight
@@ -77,11 +78,10 @@ import com.example.ui.theme.Obsidian
 import com.example.ui.theme.RoseError
 import com.example.ui.theme.RoyalBlueAccent
 import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextSecondary
 
 @Composable
 fun PlayerScreen(
-    track: Track,
+    track: Track?,
     isPlaying: Boolean,
     positionSec: Float,
     volume: Float,
@@ -89,39 +89,92 @@ fun PlayerScreen(
     isShuffle: Boolean,
     isRepeat: Boolean,
     isProUnlocked: Boolean,
-    isRemixGenerating: Boolean,
+    sleepTimerMinutes: Int,
     spectrumBars: List<Float>,
+    topOverlayPadding: Dp,
+    bottomOverlayPadding: Dp,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeekFraction: (Float) -> Unit,
-    onSeekSeconds: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
     onToggleLike: () -> Unit,
-    onExtendBeat60s: () -> Unit,
+    onCycleSleepTimer: () -> Unit,
     onIsolateVocals: () -> Unit,
     onHarmonicTransition: () -> Unit,
-    onGenerateRemix: () -> Unit,
+    onTriggerInstantAiMix: () -> Unit,
+    onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedSubTab by rememberSaveable { mutableIntStateOf(0) }
+    if (track == null) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(top = topOverlayPadding + 16.dp, bottom = bottomOverlayPadding + 16.dp, start = 20.dp, end = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(CardDarkSurface.copy(alpha = 0.88f))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LibraryMusic,
+                    contentDescription = null,
+                    tint = GoldBright,
+                    modifier = Modifier.size(34.dp)
+                )
+                Text(
+                    text = "Aucun morceau sélectionné",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Ouvrez la bibliothèque pour scanner ou importer vos fichiers audio.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    textAlign = TextAlign.Center
+                )
+                Button(
+                    onClick = onOpenLibrary,
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.testTag("player_open_library_btn")
+                ) {
+                    Text("Ouvrir la bibliothèque", fontSize = 12.sp)
+                }
+            }
+        }
+        return
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isWide = maxWidth >= 780.dp
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(
+                start = 14.dp,
+                end = 14.dp,
+                top = topOverlayPadding + 10.dp,
+                bottom = bottomOverlayPadding + 14.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (isWide) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         PlayerDeckCard(
@@ -144,18 +197,14 @@ fun PlayerScreen(
                             onToggleLike = onToggleLike,
                             modifier = Modifier.weight(1f)
                         )
-                        PlayerInsightsCard(
+                        PlayerMetadataAndActionsCard(
                             track = track,
-                            positionSec = positionSec,
                             isProUnlocked = isProUnlocked,
-                            isRemixGenerating = isRemixGenerating,
-                            selectedSubTab = selectedSubTab,
-                            onSelectSubTab = { selectedSubTab = it },
-                            onSeekSeconds = onSeekSeconds,
-                            onExtendBeat60s = onExtendBeat60s,
+                            sleepTimerMinutes = sleepTimerMinutes,
+                            onCycleSleepTimer = onCycleSleepTimer,
                             onIsolateVocals = onIsolateVocals,
                             onHarmonicTransition = onHarmonicTransition,
-                            onGenerateRemix = onGenerateRemix,
+                            onTriggerInstantAiMix = onTriggerInstantAiMix,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -183,23 +232,17 @@ fun PlayerScreen(
                     )
                 }
                 item {
-                    PlayerInsightsCard(
+                    PlayerMetadataAndActionsCard(
                         track = track,
-                        positionSec = positionSec,
                         isProUnlocked = isProUnlocked,
-                        isRemixGenerating = isRemixGenerating,
-                        selectedSubTab = selectedSubTab,
-                        onSelectSubTab = { selectedSubTab = it },
-                        onSeekSeconds = onSeekSeconds,
-                        onExtendBeat60s = onExtendBeat60s,
+                        sleepTimerMinutes = sleepTimerMinutes,
+                        onCycleSleepTimer = onCycleSleepTimer,
                         onIsolateVocals = onIsolateVocals,
                         onHarmonicTransition = onHarmonicTransition,
-                        onGenerateRemix = onGenerateRemix
+                        onTriggerInstantAiMix = onTriggerInstantAiMix
                     )
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
         }
     }
 }
@@ -230,42 +273,41 @@ private fun PlayerDeckCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(
                 Brush.radialGradient(
-                    colors = listOf(Color(track.primaryColorHex).copy(alpha = 0.22f), CardDarkSurface)
+                    colors = listOf(Color(track.primaryColorHex).copy(alpha = 0.22f), CardDarkSurface.copy(alpha = 0.90f))
                 )
             )
-            .border(1.dp, BorderGold, RoundedCornerShape(26.dp))
-            .padding(20.dp),
+            .border(1.dp, BorderGold, RoundedCornerShape(20.dp))
+            .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        // Header badge + Favorite button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val deckStatusBadge = when {
-                track.localUri != null -> "FICHIER LOCAL • AUDIO DSP"
-                track.isAiGenerated -> "CRÉATION IA PRO • EMS STUDIO"
-                else -> "SYNTHÈSE 48KHZ • AUDIO DSP"
-            }
             Text(
-                text = deckStatusBadge,
+                text = formatPlayCount(track.playCount),
                 style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 color = GoldLight,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(GoldBright.copy(alpha = 0.12f))
-                    .border(1.dp, BorderGold, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(GoldBright.copy(alpha = 0.14f))
+                    .border(1.dp, BorderGold, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
             )
 
             IconButton(
                 onClick = onToggleLike,
                 modifier = Modifier
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
                     .testTag("player_like_button")
@@ -273,52 +315,61 @@ private fun PlayerDeckCard(
                 Icon(
                     imageVector = if (track.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     contentDescription = stringResource(R.string.cd_favorite),
-                    tint = if (track.isLiked) RoseError else Color.White
+                    tint = if (track.isLiked) RoseError else Color.White,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
 
-        // Dynamic Artwork with metallic gold frame
         Box(
             modifier = Modifier
-                .size(210.dp)
-                .clip(RoundedCornerShape(26.dp))
+                .size(124.dp)
+                .clip(RoundedCornerShape(18.dp))
                 .background(Brush.linearGradient(listOf(GoldBright, RoyalBlueAccent, GoldMetallic)))
-                .padding(3.dp)
+                .padding(2.dp)
         ) {
             TrackArtworkCanvas(
                 track = track,
-                cornerRadius = 23.dp,
+                cornerRadius = 16.dp,
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        // Title & Artist
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
                 text = track.title,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${track.artist} • ${track.album}",
-                style = MaterialTheme.typography.bodyMedium,
+                text = if (track.album.isNotBlank() && track.album != "Stockage local") {
+                    "${track.artist} • ${track.album}"
+                } else {
+                    track.artist
+                },
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 11.sp,
                 color = GoldLight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
         }
 
-        // Real-time 42-bar spectrum visualizer
         AudioVisualizerCanvas(
             bars = spectrumBars,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(74.dp)
+                .height(40.dp)
         )
 
-        // Seekbar + timestamps
         Column(modifier = Modifier.fillMaxWidth()) {
             Slider(
                 value = progress,
@@ -326,7 +377,7 @@ private fun PlayerDeckCard(
                 colors = SliderDefaults.colors(
                     thumbColor = GoldBright,
                     activeTrackColor = GoldBright,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.15f)
+                    inactiveTrackColor = Color.White.copy(alpha = 0.14f)
                 ),
                 modifier = Modifier.testTag("player_progress_slider")
             )
@@ -336,18 +387,23 @@ private fun PlayerDeckCard(
             ) {
                 Text(
                     text = formatDuration(positionSec.toInt()),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    softWrap = false,
                     color = TextMuted
                 )
                 Text(
                     text = "-${formatDuration((track.durationSec - positionSec.toInt()).coerceAtLeast(0))}",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    softWrap = false,
                     color = TextMuted
                 )
             }
         }
 
-        // Transport controls
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -355,19 +411,22 @@ private fun PlayerDeckCard(
         ) {
             IconButton(
                 onClick = onToggleShuffle,
-                modifier = Modifier.testTag("player_shuffle_btn")
+                modifier = Modifier
+                    .size(34.dp)
+                    .testTag("player_shuffle_btn")
             ) {
                 Icon(
                     imageVector = Icons.Filled.Shuffle,
                     contentDescription = stringResource(R.string.cd_shuffle),
-                    tint = if (isShuffle) GoldBright else TextMuted
+                    tint = if (isShuffle) GoldBright else TextMuted,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
             IconButton(
                 onClick = onPrevious,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
                     .testTag("player_prev_btn")
@@ -376,13 +435,13 @@ private fun PlayerDeckCard(
                     imageVector = Icons.Filled.SkipPrevious,
                     contentDescription = stringResource(R.string.cd_previous_track),
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(listOf(GoldBright, GoldMetallic)))
                     .clickable(onClick = onTogglePlay)
@@ -393,14 +452,14 @@ private fun PlayerDeckCard(
                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play_pause),
                     tint = Obsidian,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
             IconButton(
                 onClick = onNext,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
                     .testTag("player_next_btn")
@@ -409,33 +468,36 @@ private fun PlayerDeckCard(
                     imageVector = Icons.Filled.SkipNext,
                     contentDescription = stringResource(R.string.cd_next_track),
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
             IconButton(
                 onClick = onToggleRepeat,
-                modifier = Modifier.testTag("player_repeat_btn")
+                modifier = Modifier
+                    .size(34.dp)
+                    .testTag("player_repeat_btn")
             ) {
                 Icon(
                     imageVector = Icons.Filled.Repeat,
                     contentDescription = stringResource(R.string.cd_repeat),
-                    tint = if (isRepeat) GoldBright else TextMuted
+                    tint = if (isRepeat) GoldBright else TextMuted,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
 
-        // Volume row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            IconButton(onClick = onToggleMute) {
+            IconButton(onClick = onToggleMute, modifier = Modifier.size(34.dp)) {
                 Icon(
                     imageVector = if (isMuted || volume == 0f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = stringResource(R.string.cd_mute),
-                    tint = GoldLight
+                    tint = GoldLight,
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Slider(
@@ -444,351 +506,182 @@ private fun PlayerDeckCard(
                 colors = SliderDefaults.colors(
                     thumbColor = GoldBright,
                     activeTrackColor = GoldBright,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.15f)
+                    inactiveTrackColor = Color.White.copy(alpha = 0.14f)
                 ),
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = "${((if (isMuted) 0f else volume) * 100).toInt()}%",
-                style = MaterialTheme.typography.labelMedium,
-                color = TextMuted
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.End,
+                modifier = Modifier.widthIn(min = 34.dp)
             )
         }
     }
 }
 
 @Composable
-private fun PlayerInsightsCard(
+private fun PlayerMetadataAndActionsCard(
     track: Track,
-    positionSec: Float,
     isProUnlocked: Boolean,
-    isRemixGenerating: Boolean,
-    selectedSubTab: Int,
-    onSelectSubTab: (Int) -> Unit,
-    onSeekSeconds: (Float) -> Unit,
-    onExtendBeat60s: () -> Unit,
+    sleepTimerMinutes: Int,
+    onCycleSleepTimer: () -> Unit,
     onIsolateVocals: () -> Unit,
     onHarmonicTransition: () -> Unit,
-    onGenerateRemix: () -> Unit,
+    onTriggerInstantAiMix: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val sizeDisplay = formatFileSize(track.fileSizeBytes).ifBlank { "—" }
+    val bitrateDisplay = if (track.bitrateKbps > 0) "${track.bitrateKbps} kbps" else "—"
+    val formatDisplay = track.mimeFormat.ifBlank { "AUDIO" }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
-            .background(CardDarkSurface.copy(alpha = 0.92f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(26.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Sub-tab switcher
+        Text(
+            text = "Informations du fichier",
+            style = MaterialTheme.typography.labelLarge,
+            color = GoldLight
+        )
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(Obsidian)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                .padding(4.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            SubTabChip(
-                text = "🎤 Paroles Sync",
-                selected = selectedSubTab == 0,
-                onClick = { onSelectSubTab(0) },
-                modifier = Modifier.weight(1f)
-            )
-            SubTabChip(
-                text = "🎛️ Analyse IA & Mix",
-                selected = selectedSubTab == 1,
-                onClick = { onSelectSubTab(1) },
+            CompactMetaTile("Format", formatDisplay, GoldBright, Modifier.weight(1f))
+            CompactMetaTile("Débit", bitrateDisplay, Color.White, Modifier.weight(1f))
+            CompactMetaTile("Taille", sizeDisplay, EmeraldAccent, Modifier.weight(1f))
+            CompactMetaTile(
+                label = if (track.year.isNotBlank()) "Année" else "Écoutes",
+                value = if (track.year.isNotBlank()) track.year else "${track.playCount}",
+                color = GoldLight,
                 modifier = Modifier.weight(1f)
             )
         }
 
-        if (selectedSubTab == 0) {
-            if (track.lyrics.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.04f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "Aucune parole synchronisée",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Ce fichier audio local ne contient pas de paroles horodatées.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextMuted
-                    )
-                }
-            } else {
-                val activeLyricIndex = track.lyrics.indexOfLast { positionSec >= it.timeSec }.coerceAtLeast(0)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    track.lyrics.forEachIndexed { idx, line ->
-                        val active = idx == activeLyricIndex
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (active) GoldBright.copy(alpha = 0.16f) else Color.Transparent)
-                                .border(
-                                    1.dp,
-                                    if (active) BorderGold else Color.Transparent,
-                                    RoundedCornerShape(14.dp)
-                                )
-                                .clickable { onSeekSeconds(line.timeSec.toFloat()) }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Text(
-                                text = formatDuration(line.timeSec),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = GoldBright.copy(alpha = 0.85f)
-                            )
-                            Text(
-                                text = line.text,
-                                style = if (active) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
-                                color = if (active) GoldLight else TextMuted
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Acoustic / Artistic description
-            Column(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CompactPlayerAction(
+                icon = Icons.Filled.Timer,
+                title = if (sleepTimerMinutes > 0) "$sleepTimerMinutes min" else "Minuteur",
+                subtitle = if (sleepTimerMinutes > 0) "Arrêt auto" else "15 / 30 / 45m",
+                onClick = onCycleSleepTimer,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(DeepBlue.copy(alpha = 0.6f))
-                    .border(1.dp, BorderGold, RoundedCornerShape(18.dp))
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = if (track.isAiGenerated) "✨ Composition IA Pro" else "🎧 Note Acoustique & Mix",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = GoldLight
-                )
-                Text(
-                    text = track.aiInsight,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-            }
-        } else {
-            // Musical metrics (no fabricated values for local files)
-            val tempoDisplay = if (track.bpm > 0) "${track.bpm} BPM" else "Local"
-            val keyDisplay = track.musicalKey.ifBlank { "—" }
-            val energyDisplay = if (track.energy > 0) "${track.energy}%" else "—"
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                AnalysisMetricCard("Tempo", tempoDisplay, GoldBright, Modifier.weight(1f))
-                AnalysisMetricCard("Tonalité", keyDisplay, Color.White, Modifier.weight(1f))
-                AnalysisMetricCard("Énergie", energyDisplay, EmeraldAccent, Modifier.weight(1f))
-            }
-
-            if (track.localUri == null) {
-                // Real DSP synthesis voice balance profile
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White.copy(alpha = 0.04f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "PROFIL SYNTHÈSE DSP • ${track.genre.uppercase()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = GoldLight
-                    )
-                    SpectralBarRow("Groove & Percussions", track.synthProfile.groove, GoldBright)
-                    SpectralBarRow("Chaleur Harmonique", track.synthProfile.warmth, RoyalBlueAccent)
-                    SpectralBarRow("Clarté Vocale / Mélodie", track.synthProfile.clarity, EmeraldAccent)
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White.copy(alpha = 0.04f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "FICHIER AUDIO LOCAL • ANALYSE PCM",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = GoldLight
-                    )
-                    Text(
-                        text = "Le spectre 42 bandes ci-dessus est décodé en temps réel depuis les échantillons PCM du fichier (${track.genre}).",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                }
-            }
-
-            // Live Studio Actions (Remix IA gated behind Play Billing Pro)
-            Text(
-                text = "ACTIONS STUDIO EN DIRECT",
-                style = MaterialTheme.typography.labelMedium,
-                color = GoldLight
+                    .weight(1f)
+                    .testTag("player_sleep_timer_btn")
             )
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    LiveActionButton(
-                        icon = Icons.Filled.Timer,
-                        title = "Étendre (+60s)",
-                        subtitle = if (track.localUri == null) "Boucle synthétiseur" else "Synthèse uniquement",
-                        onClick = onExtendBeat60s,
-                        modifier = Modifier.weight(1f)
-                    )
-                    LiveActionButton(
-                        icon = Icons.Filled.Mic,
-                        title = "Isoler Lead",
-                        subtitle = "Filtre 1kHz–3kHz",
-                        onClick = onIsolateVocals,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    LiveActionButton(
-                        icon = Icons.Filled.Tune,
-                        title = "Transition DJ",
-                        subtitle = "Enchaînement fluide",
-                        onClick = onHarmonicTransition,
-                        modifier = Modifier.weight(1f)
-                    )
-                    LiveActionButton(
-                        icon = if (isProUnlocked) Icons.Filled.AutoAwesome else Icons.Filled.Lock,
-                        title = if (isRemixGenerating) "Remix IA..." else if (isProUnlocked) "Remix IA" else "Remix IA • PRO",
-                        subtitle = when {
-                            isRemixGenerating -> "Gemini en cours..."
-                            isProUnlocked -> "Arrangement Gemini"
-                            else -> "Payant (Ems Pro)"
-                        },
-                        isLoading = isRemixGenerating,
-                        onClick = onGenerateRemix,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            CompactPlayerAction(
+                icon = Icons.Filled.Mic,
+                title = "Mode Voix",
+                subtitle = "Clarté chant",
+                onClick = onIsolateVocals,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CompactPlayerAction(
+                icon = Icons.Filled.Tune,
+                title = "Fondu",
+                subtitle = "Piste suivante",
+                onClick = onHarmonicTransition,
+                modifier = Modifier.weight(1f)
+            )
+            CompactPlayerAction(
+                icon = if (isProUnlocked) Icons.Filled.AutoAwesome else Icons.Filled.Lock,
+                title = if (isProUnlocked) "Mix IA" else "Mix Pro",
+                subtitle = "File intelligente",
+                onClick = onTriggerInstantAiMix,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
-private fun SubTabChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
+private fun CompactMetaTile(label: String, value: String, color: Color, modifier: Modifier) {
+    Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) GoldBright else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
+            .clip(RoundedCornerShape(11.dp))
+            .background(Obsidian.copy(alpha = 0.65f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(11.dp))
+            .padding(vertical = 7.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            fontSize = 12.sp,
-            color = if (selected) Obsidian else TextSecondary
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            color = TextMuted
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = 10.5.sp,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
 @Composable
-private fun AnalysisMetricCard(label: String, value: String, color: Color, modifier: Modifier) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(DeepBlue.copy(alpha = 0.5f))
-            .border(1.dp, BorderGold, RoundedCornerShape(16.dp))
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = value, style = MaterialTheme.typography.titleMedium, color = color)
-    }
-}
-
-@Composable
-private fun SpectralBarRow(label: String, percent: Int, color: Color) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = label, style = MaterialTheme.typography.bodyMedium, fontSize = 12.sp, color = TextSecondary)
-            Text(text = "$percent%", style = MaterialTheme.typography.labelMedium, color = color)
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(7.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color.White.copy(alpha = 0.1f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth((percent / 100f).coerceIn(0f, 1f))
-                    .height(7.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(color)
-            )
-        }
-    }
-}
-
-@Composable
-private fun LiveActionButton(
+private fun CompactPlayerAction(
     icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit,
-    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Row(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-            .clickable(enabled = !isLoading, onClick = onClick)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = GoldBright,
-                strokeWidth = 2.dp
+        Icon(imageVector = icon, contentDescription = title, tint = GoldBright, modifier = Modifier.size(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontSize = 12.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
-        } else {
-            Icon(imageVector = icon, contentDescription = title, tint = GoldBright, modifier = Modifier.size(18.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+                fontSize = 10.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
-        Text(text = title, style = MaterialTheme.typography.labelLarge, color = Color.White, fontSize = 13.sp)
-        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = TextMuted, fontSize = 11.sp)
     }
 }

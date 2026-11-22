@@ -36,7 +36,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioSettingsState
@@ -51,12 +53,14 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextSecondary
 import kotlin.math.roundToInt
 
-private val eqFreqLabels = listOf("60Hz", "170Hz", "350Hz", "1kHz", "3kHz", "6kHz", "12kHz")
+private val eqFreqLabels = listOf("60", "170", "350", "1k", "3k", "6k", "12k")
 
 @Composable
 fun EqualizerScreen(
     settings: AudioSettingsState,
     dspStatus: String,
+    topOverlayPadding: Dp,
+    bottomOverlayPadding: Dp,
     onBandChange: (Int, Float) -> Unit,
     onSelectPreset: (String) -> Unit,
     onToggleCrossfade: (Boolean) -> Unit,
@@ -76,17 +80,34 @@ fun EqualizerScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            contentPadding = PaddingValues(
+                start = 14.dp,
+                end = 14.dp,
+                top = topOverlayPadding + 10.dp,
+                bottom = bottomOverlayPadding + 14.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("DSP & ACOUSTIQUE TEMPS RÉEL", style = MaterialTheme.typography.labelMedium, color = GoldBright)
-                    Text("Égaliseur 7 Bandes & Audio Spatial", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        "Ajustez la courbe fréquentielle du moteur AudioTrack / Equalizer en direct et activez les traitements DSP.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextMuted
+                        text = "Égaliseur",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    )
+                    Text(
+                        text = dspStatus,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = EmeraldAccent,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -95,7 +116,7 @@ fun EqualizerScreen(
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         EqualizerBandsCard(
@@ -109,7 +130,6 @@ fun EqualizerScreen(
                         )
                         DspSettingsCard(
                             settings = settings,
-                            dspStatus = dspStatus,
                             onToggleCrossfade = onToggleCrossfade,
                             onToggleNormalize = onToggleNormalize,
                             onToggleSpatial3d = onToggleSpatial3d,
@@ -135,7 +155,6 @@ fun EqualizerScreen(
                 item {
                     DspSettingsCard(
                         settings = settings,
-                        dspStatus = dspStatus,
                         onToggleCrossfade = onToggleCrossfade,
                         onToggleNormalize = onToggleNormalize,
                         onToggleSpatial3d = onToggleSpatial3d,
@@ -146,8 +165,6 @@ fun EqualizerScreen(
                     )
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
         }
     }
 }
@@ -162,62 +179,60 @@ private fun EqualizerBandsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(CardDarkSurface.copy(alpha = 0.92f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(24.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Égaliseur Graphique 7 Bandes", style = MaterialTheme.typography.titleMedium, color = Color.White)
-
-        // Presets row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             listOf(
                 "flat" to "Plat",
-                "bass" to "Bass Boost",
-                "zouk" to "R&B / Zouk",
-                "studio" to "Studio DSP",
-                "vocal" to "Vocal"
+                "bass" to "Basses",
+                "zouk" to "Doux",
+                "studio" to "Clair",
+                "vocal" to "Voix"
             ).forEach { (key, label) ->
                 val active = settings.activePreset == key
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (active) GoldBright else Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, if (active) GoldBright else BorderSubtle, RoundedCornerShape(12.dp))
+                        .border(1.dp, if (active) GoldBright else BorderSubtle, RoundedCornerShape(10.dp))
                         .clickable { onSelectPreset(key) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                         .testTag("eq_preset_$key")
                 ) {
                     Text(
                         text = label,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        softWrap = false,
                         color = if (active) Obsidian else TextSecondary
                     )
                 }
             }
         }
 
-        // 7 vertical sliders
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(Obsidian.copy(alpha = 0.72f))
-                .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
-                .padding(horizontal = 8.dp, vertical = 14.dp),
+                .clip(RoundedCornerShape(14.dp))
+                .background(Obsidian.copy(alpha = 0.68f))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
+                .padding(horizontal = 4.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             eqFreqLabels.forEachIndexed { idx, freqLabel ->
                 val gain = settings.eqGainsDb.getOrElse(idx) { 0f }
-                val gainText = if (gain > 0f) "+${gain.roundToInt()}dB" else "${gain.roundToInt()}dB"
+                val gainText = if (gain > 0f) "+${gain.roundToInt()}" else "${gain.roundToInt()}"
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.weight(1f)
@@ -225,21 +240,27 @@ private fun EqualizerBandsCard(
                     Text(
                         text = gainText,
                         style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.5.sp,
+                        maxLines = 1,
+                        softWrap = false,
                         color = GoldLight
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     VerticalEqSlider(
                         value = gain,
                         onValueChange = { onBandChange(idx, it) },
                         modifier = Modifier
-                            .height(155.dp)
-                            .width(36.dp)
+                            .height(124.dp)
+                            .width(28.dp)
                             .testTag("eq_band_$idx")
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = freqLabel,
                         style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.5.sp,
+                        maxLines = 1,
+                        softWrap = false,
                         color = TextMuted
                     )
                 }
@@ -251,14 +272,23 @@ private fun EqualizerBandsCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Plage dynamique : -12 dB à +12 dB", style = MaterialTheme.typography.bodyMedium, fontSize = 12.sp, color = TextMuted)
             Text(
-                text = "Réinitialiser à 0 dB",
-                style = MaterialTheme.typography.labelLarge,
+                text = "-12 à +12 dB • Fréquences (Hz)",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            )
+            Text(
+                text = "Réinitialiser",
+                style = MaterialTheme.typography.labelMedium,
                 color = GoldBright,
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier
                     .clickable { onSelectPreset("flat") }
-                    .padding(6.dp)
+                    .padding(4.dp)
             )
         }
     }
@@ -303,7 +333,6 @@ private fun VerticalEqSlider(
 @Composable
 private fun DspSettingsCard(
     settings: AudioSettingsState,
-    dspStatus: String,
     onToggleCrossfade: (Boolean) -> Unit,
     onToggleNormalize: (Boolean) -> Unit,
     onToggleSpatial3d: (Boolean) -> Unit,
@@ -313,65 +342,45 @@ private fun DspSettingsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(CardDarkSurface.copy(alpha = 0.92f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(24.dp))
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Traitements DSP & Confort", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text("Effets & Confort", style = MaterialTheme.typography.titleSmall, color = Color.White)
 
         DspToggleRow(
-            title = "Fondu Enchaîné Temps Réel",
-            subtitle = "Enchaîne les pistes avec rampe d'entrée et de sortie (3,5 s).",
+            title = "Fondu enchaîné",
+            subtitle = "Enchaînement doux entre les titres",
             checked = settings.crossfadeEnabled,
             onCheckedChange = onToggleCrossfade,
             testTag = "toggle_crossfade"
         )
 
         DspToggleRow(
-            title = "Normalisation Loudness",
-            subtitle = "Active LoudnessEnhancer matériel (-14 LUFS cible) entre chaque piste.",
+            title = "Normalisation",
+            subtitle = "Équilibre le volume entre les morceaux",
             checked = settings.normalizeEnabled,
             onCheckedChange = onToggleNormalize,
             testTag = "toggle_normalize"
         )
 
         DspToggleRow(
-            title = "Spatial Audio 3D Binaural",
-            subtitle = "Élargit la scène stéréo avec spatialisation psychoacoustique.",
+            title = "Son spatial 3D",
+            subtitle = "Élargit la scène stéréo au casque",
             checked = settings.spatial3dEnabled,
             onCheckedChange = onToggleSpatial3d,
-            badge = "BINAURAL",
             testTag = "toggle_spatial3d"
         )
 
         DspToggleRow(
-            title = "Retour Haptique (Vibrations)",
-            subtitle = "Légère vibration tactile sur les contrôles de lecture (désactivable).",
+            title = "Vibrations",
+            subtitle = "Retour tactile léger sur les boutons",
             checked = settings.hapticFeedbackEnabled,
             onCheckedChange = onToggleHapticFeedback,
             testTag = "toggle_haptic_feedback"
         )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(Obsidian.copy(alpha = 0.8f))
-                .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Statut Moteur DSP", style = MaterialTheme.typography.labelMedium, color = TextMuted)
-                Text(dspStatus, style = MaterialTheme.typography.labelMedium, color = EmeraldAccent)
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Échantillonnage", style = MaterialTheme.typography.labelMedium, color = TextMuted)
-                Text("48000 Hz • Stéréo 16-bit", style = MaterialTheme.typography.labelMedium, color = Color.White)
-            }
-        }
     }
 }
 
@@ -381,35 +390,35 @@ private fun DspToggleRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    testTag: String,
-    badge: String? = null
+    testTag: String
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(Color.White.copy(alpha = 0.04f))
-            .border(1.dp, BorderGold.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
-            .padding(14.dp),
+            .border(1.dp, BorderGold.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, style = MaterialTheme.typography.labelLarge, color = Color.White)
-                if (badge != null) {
-                    Text(
-                        text = badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = GoldLight,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(GoldBright.copy(alpha = 0.18f))
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    )
-                }
-            }
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, fontSize = 11.sp, color = TextMuted)
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = Color.White
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 10.5.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = TextMuted
+            )
         }
 
         Switch(

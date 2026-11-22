@@ -1,6 +1,6 @@
 {
-  "name": "Ems Player",
-  "description": "Lecteur multimédia haute fidélité et co-pilote musical IA avec égaliseur 7 bandes et gestion des permissions Android 7 à 15.",
+  "name": "Em Player",
+  "description": "Lecteur audio haute fidélité avec égaliseur 7 bandes et Studio IA.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

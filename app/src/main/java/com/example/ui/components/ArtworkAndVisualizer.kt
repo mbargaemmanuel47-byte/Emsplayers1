@@ -1,5 +1,11 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -24,23 +31,219 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.model.Track
 import com.example.ui.theme.GoldBright
+import com.example.ui.theme.GoldLight
 import com.example.ui.theme.GoldMetallic
 import com.example.ui.theme.Midnight
 import com.example.ui.theme.Obsidian
 import com.example.ui.theme.RoyalBlueAccent
+import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 fun formatDuration(seconds: Int): String {
     val s = seconds.coerceAtLeast(0)
     val mins = s / 60
     val secs = s % 60
-    return "%d:%02d".format(mins, secs)
+    return String.format(Locale.FRANCE, "%d:%02d", mins, secs)
+}
+
+fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0L) return ""
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return String.format(Locale.FRANCE, "%.0f Ko", kb)
+    val mb = kb / 1024.0
+    return String.format(Locale.FRANCE, "%.1f Mo", mb)
+}
+
+fun formatPlayCount(count: Int): String {
+    return when {
+        count <= 0 -> "Nouveau"
+        count == 1 -> "1 écoute"
+        else -> "$count écoutes"
+    }
+}
+
+@Composable
+fun EmPlayerLogo(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "em_logo_wave")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "wave_phase"
+    )
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val radius = minOf(w, h) / 2f
+        val center = Offset(w / 2f, h / 2f)
+
+        // Circular medallion backdrop
+        drawCircle(
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF10204A), Obsidian)
+            ),
+            radius = radius,
+            center = center
+        )
+        drawCircle(
+            brush = Brush.linearGradient(
+                colors = listOf(GoldBright, RoyalBlueAccent.copy(alpha = 0.8f), GoldMetallic)
+            ),
+            radius = radius - (w * 0.03f),
+            center = center,
+            style = Stroke(width = (w * 0.06f).coerceAtLeast(1.5f))
+        )
+
+        // Subtle inner glow arc
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(GoldBright.copy(alpha = 0.26f), Color.Transparent),
+                center = Offset(w * 0.35f, h * 0.30f),
+                radius = w * 0.60f
+            ),
+            radius = radius * 0.92f,
+            center = center
+        )
+
+        // Three precision soundwave bars ("Em" emblem)
+        val barWidth = w * 0.11f
+        val gap = w * 0.08f
+        val startX = (w - (barWidth * 3 + gap * 2)) / 2f
+        val baseFractions = floatArrayOf(0.36f, 0.56f, 0.42f)
+
+        for (i in 0..2) {
+            val animFactor = if (isPlaying) {
+                0.78f + 0.22f * sin(phase + i * 1.3f)
+            } else {
+                1f
+            }
+            val barH = (h * baseFractions[i] * animFactor).coerceAtLeast(h * 0.20f)
+            val x = startX + i * (barWidth + gap)
+            val y = (h - barH) / 2f
+            drawRoundRect(
+                brush = Brush.verticalGradient(
+                    colors = if (i == 1) listOf(GoldLight, GoldBright, GoldMetallic)
+                    else listOf(GoldBright, RoyalBlueAccent)
+                ),
+                topLeft = Offset(x, y),
+                size = Size(barWidth, barH),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            )
+        }
+    }
+}
+
+@Composable
+fun FloatingAmbientBackground(
+    accentColor: Color,
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "ambient_motion")
+    val orbit by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (isPlaying) 14000 else 22000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orbit_angle"
+    )
+    val drift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "drift"
+    )
+
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+
+        // Floating ambient orb 1 (gold)
+        val c1 = Offset(
+            x = w * (0.22f + 0.14f * cos(orbit)),
+            y = h * (0.18f + 0.08f * sin(orbit))
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(GoldBright.copy(alpha = 0.14f), Color.Transparent),
+                center = c1,
+                radius = w * 0.45f
+            ),
+            center = c1,
+            radius = w * 0.45f
+        )
+
+        // Floating ambient orb 2 (track accent / sapphire)
+        val c2 = Offset(
+            x = w * (0.78f - 0.16f * sin(orbit * 0.8f)),
+            y = h * (0.52f + 0.12f * cos(orbit * 0.8f))
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(accentColor.copy(alpha = 0.16f), Color.Transparent),
+                center = c2,
+                radius = w * 0.52f
+            ),
+            center = c2,
+            radius = w * 0.52f
+        )
+
+        // Floating ambient orb 3 (deep emerald/blue bottom)
+        val c3 = Offset(
+            x = w * (0.38f + 0.18f * (drift - 0.5f)),
+            y = h * (0.86f - 0.06f * sin(orbit))
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(RoyalBlueAccent.copy(alpha = 0.15f), Color.Transparent),
+                center = c3,
+                radius = w * 0.42f
+            ),
+            center = c3,
+            radius = w * 0.42f
+        )
+
+        // Subtle small floating luminous particles
+        val particleCount = 10
+        for (i in 0 until particleCount) {
+            val seedX = ((i * 37) % 100) / 100f
+            val seedY = ((i * 53 + 17) % 100) / 100f
+            val speed = 1f + (i % 3) * 0.35f
+            val px = ((seedX + 0.06f * sin(orbit * speed + i)) * w).coerceIn(0f, w)
+            val py = ((seedY - (orbit / (2f * PI.toFloat())) * 0.18f * speed + 1f) % 1f) * h
+            val r = (2.2f + (i % 3) * 1.4f).dp.toPx()
+            val alpha = 0.16f + 0.14f * ((sin(orbit * 2f + i) + 1f) * 0.5f)
+            val particleColor = if (i % 2 == 0) GoldBright else RoyalBlueAccent
+
+            drawCircle(
+                color = particleColor.copy(alpha = alpha),
+                radius = r,
+                center = Offset(px, py)
+            )
+        }
+    }
 }
 
 @Composable
 fun TrackArtworkCanvas(
     track: Track,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 14.dp
+    cornerRadius: Dp = 12.dp
 ) {
     val primary = Color(track.primaryColorHex)
     val secondary = Color(track.secondaryColorHex)
@@ -59,47 +262,47 @@ fun TrackArtworkCanvas(
                     val h = size.height
 
                     val bgBrush = Brush.linearGradient(
-                        colors = listOf(secondary, tertiary, primary.copy(alpha = 0.75f)),
+                        colors = listOf(secondary, tertiary, primary.copy(alpha = 0.72f)),
                         start = Offset.Zero,
                         end = Offset(w, h)
                     )
                     val orbCenter = Offset(w * 0.35f, h * 0.30f)
                     val orbRadius = (w * 0.42f).coerceAtLeast(1f)
                     val orbBrush = Brush.radialGradient(
-                        colors = listOf(primary.copy(alpha = 0.78f), Color.Transparent),
+                        colors = listOf(primary.copy(alpha = 0.75f), Color.Transparent),
                         center = orbCenter,
                         radius = orbRadius
                     )
                     val ringStrokeDashed = Stroke(
-                        width = (w * 0.009f).coerceAtLeast(1.2f),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        width = (w * 0.010f).coerceAtLeast(1.1f),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 7f), 0f)
                     )
                     val ringStrokeThin = Stroke(width = (w * 0.006f).coerceAtLeast(1f))
                     val wave1 = Path().apply {
-                        moveTo(w * 0.26f, h * 0.50f)
+                        moveTo(w * 0.25f, h * 0.50f)
                         quadraticTo(w * 0.38f, h * 0.32f, w * 0.50f, h * 0.50f)
-                        quadraticTo(w * 0.62f, h * 0.68f, w * 0.74f, h * 0.50f)
+                        quadraticTo(w * 0.62f, h * 0.68f, w * 0.75f, h * 0.50f)
                     }
                     val wave2 = Path().apply {
-                        moveTo(w * 0.32f, h * 0.56f)
-                        quadraticTo(w * 0.42f, h * 0.42f, w * 0.50f, h * 0.56f)
-                        quadraticTo(w * 0.58f, h * 0.70f, w * 0.68f, h * 0.56f)
+                        moveTo(w * 0.32f, h * 0.57f)
+                        quadraticTo(w * 0.42f, h * 0.43f, w * 0.50f, h * 0.57f)
+                        quadraticTo(w * 0.58f, h * 0.71f, w * 0.68f, h * 0.57f)
                     }
-                    val stroke1 = Stroke(width = (w * 0.020f).coerceAtLeast(2f), cap = StrokeCap.Round)
-                    val stroke2 = Stroke(width = (w * 0.011f).coerceAtLeast(1.2f), cap = StrokeCap.Round)
+                    val stroke1 = Stroke(width = (w * 0.022f).coerceAtLeast(1.8f), cap = StrokeCap.Round)
+                    val stroke2 = Stroke(width = (w * 0.012f).coerceAtLeast(1.1f), cap = StrokeCap.Round)
 
                     onDrawBehind {
                         drawRect(brush = bgBrush)
                         drawCircle(brush = orbBrush, center = orbCenter, radius = orbRadius)
                         drawCircle(
-                            color = primary.copy(alpha = 0.45f),
+                            color = primary.copy(alpha = 0.42f),
                             radius = w * 0.27f,
                             center = Offset(w * 0.5f, h * 0.5f),
                             style = ringStrokeDashed
                         )
                         drawCircle(
-                            color = Color.White.copy(alpha = 0.25f),
-                            radius = w * 0.17f,
+                            color = Color.White.copy(alpha = 0.24f),
+                            radius = w * 0.16f,
                             center = Offset(w * 0.5f, h * 0.5f),
                             style = ringStrokeThin
                         )
@@ -118,20 +321,20 @@ fun AudioVisualizerCanvas(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Obsidian.copy(alpha = 0.75f))
-            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .background(Obsidian.copy(alpha = 0.68f))
+            .border(1.dp, Color.White.copy(alpha = 0.09f), RoundedCornerShape(14.dp))
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val count = bars.size.coerceAtLeast(1)
-            val horizontalPad = 12.dp.toPx()
+            val horizontalPad = 10.dp.toPx()
             val availW = (size.width - horizontalPad * 2).coerceAtLeast(1f)
-            val gap = 3.dp.toPx()
+            val gap = 2.5.dp.toPx()
             val barWidth = ((availW - gap * (count - 1)) / count).coerceAtLeast(2f)
 
             for (i in 0 until count) {
                 val amp = bars[i].coerceIn(0.06f, 1.0f)
-                val barHeight = (amp * size.height * 0.82f).coerceAtLeast(6.dp.toPx())
+                val barHeight = (amp * size.height * 0.80f).coerceAtLeast(4.dp.toPx())
                 val x = horizontalPad + i * (barWidth + gap)
                 val y = (size.height - barHeight) / 2f
 

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Ems Player"
+rootProject.name = "Em Player"
 
 include(":app")

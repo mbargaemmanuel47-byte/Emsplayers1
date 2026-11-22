@@ -13,7 +13,6 @@ import com.example.billing.BillingUiState
 import com.example.billing.PlayBillingManager
 import com.example.data.local.AuraDatabase
 import com.example.data.local.LocalMediaScanner
-import com.example.data.local.SeedCatalog
 import com.example.data.local.TrackEntity
 import com.example.data.local.UserPreferencesRepository
 import com.example.model.AiGenerationUiState
@@ -33,9 +32,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
-import kotlin.math.abs
 
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -47,7 +46,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val audioController = AuraAudioController(appContext, viewModelScope)
     private val billingManager = PlayBillingManager(appContext, viewModelScope)
 
-    // Pro débloqué pour le moment (le module Google Play Billing reste prêt pour la production)
     private val proUnlockedForNow = true
 
     val billingState: StateFlow<BillingUiState> = billingManager.uiState
@@ -55,27 +53,20 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         .map { proUnlockedForNow || it.isProUnlocked }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), proUnlockedForNow)
 
-    val hasDismissedOnboarding: StateFlow<Boolean> = preferencesRepo.preferencesFlow
-        .map { it.hasDismissedOnboarding }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
     private val _showPaywallDialog = MutableStateFlow(false)
     val showPaywallDialog: StateFlow<Boolean> = _showPaywallDialog.asStateFlow()
 
-    private val _isRemixGenerating = MutableStateFlow(false)
-    val isRemixGenerating: StateFlow<Boolean> = _isRemixGenerating.asStateFlow()
-
     val tracks: StateFlow<List<Track>> = trackDao.observeAllTracks()
         .map { entities -> entities.map { it.toDomain() } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SeedCatalog.initialTracks)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val audioSettings: StateFlow<AudioSettingsState> = preferencesRepo.audioSettingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioSettingsState())
 
-    private val _currentTrackId = MutableStateFlow(1L)
-    val currentTrack: StateFlow<Track> = combine(tracks, _currentTrackId) { list, id ->
-        list.find { it.id == id } ?: list.firstOrNull() ?: SeedCatalog.initialTracks.first()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, SeedCatalog.initialTracks.first())
+    private val _currentTrackId = MutableStateFlow(-1L)
+    val currentTrack: StateFlow<Track?> = combine(tracks, _currentTrackId) { list, id ->
+        list.find { it.id == id } ?: list.firstOrNull()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val isPlaying: StateFlow<Boolean> = audioController.isPlaying
     val currentPositionSec: StateFlow<Float> = audioController.currentPositionSec
@@ -102,7 +93,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             ChatMessage(
                 id = "welcome",
                 isUser = false,
-                text = "Bonjour ! Je suis Aura, votre co-pilote musical propulsé par Gemini. Tous les outils Studio IA Pro sont débloqués : demandez-moi une analyse ou un mix sur mesure !"
+                text = "Bonjour ! Demandez une ambiance ou un ordre d'écoute selon vos musiques."
             )
         )
     )
@@ -110,6 +101,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isCopilotTyping = MutableStateFlow(false)
     val isCopilotTyping: StateFlow<Boolean> = _isCopilotTyping.asStateFlow()
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    private val _sleepTimerMinutes = MutableStateFlow(0)
+    val sleepTimerMinutes: StateFlow<Int> = _sleepTimerMinutes.asStateFlow()
 
     private val _permissionStatuses = MutableStateFlow(PermissionManager.getAllStatuses(appContext))
     val permissionStatuses: StateFlow<List<AndroidPermissionStatus>> = _permissionStatuses.asStateFlow()
@@ -119,15 +116,11 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     private var toastJob: Job? = null
     private var copilotJob: Job? = null
+    private var sleepTimerJob: Job? = null
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            if (trackDao.getTrackCount() == 0) {
-                val seeded = SeedCatalog.initialTracks.mapIndexed { idx, track ->
-                    TrackEntity.fromDomain(track, sortOrder = idx + 10)
-                }
-                trackDao.insertTracks(seeded)
-            }
+            trackDao.deleteLegacyDemoTracks()
             preferencesRepo.ensureInitialized()
             database.userPreferenceDao().getPreferencesOnce()?.let { saved ->
                 _currentTrackId.value = saved.lastTrackId
@@ -146,6 +139,9 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
+            }
+            if (PermissionManager.hasAudioLibraryPermission(appContext)) {
+                scanDeviceAudioInternal(silent = true)
             }
         }
 
@@ -174,6 +170,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         PlaybackNotificationBridge.onPrevAction = {
             viewModelScope.launch { previousTrack() }
         }
+        PlaybackNotificationBridge.onSeekToAction = { posMs ->
+            viewModelScope.launch { seekToSeconds(posMs / 1000f) }
+        }
+        PlaybackNotificationBridge.onStopAction = {
+            viewModelScope.launch { audioController.pauseWithoutNotification() }
+        }
     }
 
     fun openPaywall() {
@@ -190,7 +192,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun restoreProPurchases() {
         billingManager.refreshPurchases()
-        showToast("Vérification Google Play", "Recherche de vos achats et abonnements actifs...")
+        showToast("Vérification des achats", "Recherche en cours...")
     }
 
     fun refreshBilling() {
@@ -200,10 +202,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private fun requireProEntitlement(): Boolean {
         if (proUnlockedForNow || billingState.value.isProUnlocked) return true
         _showPaywallDialog.value = true
-        showToast(
-            "Ems Player Pro requis",
-            "La génération musicale par IA est réservée aux membres Pro."
-        )
         return false
     }
 
@@ -211,7 +209,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         toastJob?.cancel()
         _toastBanner.value = title to subtitle
         toastJob = viewModelScope.launch {
-            delay(2800L)
+            delay(2600L)
             _toastBanner.value = null
         }
     }
@@ -219,11 +217,20 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun playTrack(track: Track) {
         _currentTrackId.value = track.id
         audioController.playTrack(track)
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             preferencesRepo.saveLastTrackId(track.id)
+            trackDao.incrementPlayCount(track.id, System.currentTimeMillis())
+            if ((track.bitrateKbps == 0 || track.year.isBlank()) && !track.localUri.isNullOrBlank()) {
+                LocalMediaScanner.readBitrateAndYear(appContext, track.localUri)?.let { (br, yr) ->
+                    trackDao.updateAudioDetails(
+                        trackId = track.id,
+                        bitrateKbps = if (br > 0) br else track.bitrateKbps,
+                        year = yr.ifBlank { track.year }
+                    )
+                }
+            }
         }
-        val tempoInfo = if (track.bpm > 0) "${track.bpm} BPM" else track.genre
-        showToast("Lecture : ${track.title}", "${track.artist} • $tempoInfo")
+        showToast(track.title, track.artist)
     }
 
     fun playTrackById(trackId: Long) {
@@ -232,20 +239,24 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun togglePlayPause() {
+        val active = currentTrack.value
+        if (active == null) {
+            showToast("Aucun morceau", "Touchez Scanner ou Importer pour ajouter vos sons.")
+            return
+        }
         if (isPlaying.value) {
             audioController.pause()
         } else {
-            audioController.resume(currentTrack.value)
+            audioController.resume(active)
         }
     }
 
     fun nextTrack() {
         val list = tracks.value
         if (list.isEmpty()) return
-        val currentIdx = list.indexOfFirst { it.id == _currentTrackId.value }.coerceAtLeast(0)
+        val currentIdx = list.indexOfFirst { it.id == (currentTrack.value?.id ?: -1L) }.coerceAtLeast(0)
         val nextIdx = if (isShuffle.value && list.size > 1) {
-            val candidates = list.indices.filter { it != currentIdx }
-            candidates.shuffled().first()
+            list.indices.filter { it != currentIdx }.shuffled().first()
         } else {
             (currentIdx + 1) % list.size
         }
@@ -259,7 +270,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
         val list = tracks.value
         if (list.isEmpty()) return
-        val currentIdx = list.indexOfFirst { it.id == _currentTrackId.value }.coerceAtLeast(0)
+        val currentIdx = list.indexOfFirst { it.id == (currentTrack.value?.id ?: -1L) }.coerceAtLeast(0)
         val prevIdx = (currentIdx - 1 + list.size) % list.size
         playTrack(list[prevIdx])
     }
@@ -267,14 +278,17 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun seekToFraction(fraction: Float) = audioController.seekToFraction(fraction)
     fun seekToSeconds(sec: Float) = audioController.seekToSeconds(sec)
     fun setVolume(vol: Float) = audioController.setVolume(vol)
+
     fun toggleMute() {
         audioController.toggleMute()
         showToast(if (isMuted.value) "Son coupé" else "Son rétabli")
     }
+
     fun toggleShuffle() {
         audioController.toggleShuffle()
-        showToast(if (isShuffle.value) "Lecture aléatoire activée" else "Lecture aléatoire désactivée")
+        showToast(if (isShuffle.value) "Aléatoire activé" else "Aléatoire désactivé")
     }
+
     fun toggleRepeat() {
         audioController.toggleRepeat()
         showToast(if (isRepeat.value) "Répétition activée" else "Répétition désactivée")
@@ -282,18 +296,23 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleLike(track: Track) {
         val nextLiked = !track.isLiked
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             trackDao.updateLiked(track.id, nextLiked)
         }
-        showToast(
-            if (nextLiked) "Ajouté aux favoris : ${track.title}" else "Retiré des favoris : ${track.title}"
-        )
+        showToast(if (nextLiked) "Ajouté aux favoris" else "Retiré des favoris", track.title)
     }
 
-    fun setHomeMoodFilter(mood: String) {
-        _homeMoodFilter.value = mood
+    fun deleteTrack(track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            trackDao.deleteTrack(track.id)
+        }
+        showToast("Retiré de la bibliothèque", track.title)
+    }
+
+    fun setHomeMoodFilter(filter: String) {
+        _homeMoodFilter.value = filter
         viewModelScope.launch {
-            preferencesRepo.savePreferredMood(mood)
+            preferencesRepo.savePreferredMood(filter)
         }
     }
 
@@ -301,108 +320,97 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         _globalSearchQuery.value = query
     }
 
-    // Paid AI Music Generation: Instant Mix via Gemini 3.8 Flash
+    fun cycleSleepTimer() {
+        val next = when (_sleepTimerMinutes.value) {
+            0 -> 15
+            15 -> 30
+            30 -> 45
+            else -> 0
+        }
+        _sleepTimerMinutes.value = next
+        sleepTimerJob?.cancel()
+        if (next > 0) {
+            showToast("Minuteur activé", "Arrêt automatique dans $next min")
+            sleepTimerJob = viewModelScope.launch {
+                while (isActive && _sleepTimerMinutes.value > 0) {
+                    delay(60_000L)
+                    val remaining = (_sleepTimerMinutes.value - 1).coerceAtLeast(0)
+                    _sleepTimerMinutes.value = remaining
+                    if (remaining == 0) {
+                        audioController.pause()
+                        showToast("Minuteur terminé", "Lecture mise en pause")
+                        break
+                    }
+                }
+            }
+        } else {
+            showToast("Minuteur désactivé")
+        }
+    }
+
     fun triggerInstantAiMix(onMixReady: () -> Unit = {}) {
         if (!requireProEntitlement()) return
+        val catalog = tracks.value
+        if (catalog.isEmpty()) {
+            showToast("Bibliothèque vide", "Scannez ou importez d'abord vos musiques.")
+            return
+        }
         val active = currentTrack.value
-        val targetBpm = if (active.bpm > 0) active.bpm else 104
-        val prompt = "Sélectionne un mix immédiat cohérent autour de ${active.genre} (${active.mood})"
+        val prompt = if (active != null) {
+            "Mix cohérent autour de ${active.title} (${active.artist})"
+        } else {
+            "Sélection harmonieuse à partir de mes musiques"
+        }
         viewModelScope.launch {
             _aiPlaylistState.value = AiGenerationUiState.Loading
             try {
                 val result = aiRepository.generateCustomPlaylist(
                     prompt = prompt,
-                    targetBpm = targetBpm,
-                    emotionalIntensity = active.energy.coerceIn(40, 95),
-                    catalog = tracks.value
+                    targetBpm = 104,
+                    emotionalIntensity = 75,
+                    catalog = catalog
                 )
                 _aiPlaylistState.value = AiGenerationUiState.Success(result)
                 preferencesRepo.saveCachedMix(prompt, result)
                 result.trackIds.firstOrNull()?.let { playTrackById(it) }
                 onMixReady()
             } catch (e: Exception) {
-                _aiPlaylistState.value = AiGenerationUiState.Error(
-                    e.localizedMessage ?: "Échec du Mix IA Gemini"
-                )
-                showToast("Erreur Mix IA", e.localizedMessage ?: "Vérifiez votre connexion.")
+                val msg = e.localizedMessage ?: "Erreur lors de la création du mix."
+                _aiPlaylistState.value = AiGenerationUiState.Error(msg)
+                showToast("Erreur Mix IA", msg)
             }
         }
-    }
-
-    // Synth DSP Loop Extension (non-AI for synth tracks; honest block for fixed-length local files)
-    fun extendBeat60s() {
-        val track = currentTrack.value
-        if (track.localUri != null) {
-            showToast(
-                "Fichier audio local",
-                "La durée d'un fichier audio importé est fixe."
-            )
-            return
-        }
-        val newDuration = track.durationSec + 60
-        viewModelScope.launch {
-            trackDao.updateDuration(track.id, newDuration)
-            audioController.updateActiveTrackDuration(newDuration)
-        }
-        if (!isPlaying.value) togglePlayPause()
-        showToast("Boucle synthétiseur étendue (+60s)", "Durée prolongée sur ${track.title}")
     }
 
     fun isolateVocals() {
         applyEqPreset("vocal")
-        if (!isPlaying.value) togglePlayPause()
-        showToast("Isolation Vocale / Lead activée", "Courbe DSP centrée sur 1kHz – 3kHz")
+        if (!isPlaying.value && currentTrack.value != null) togglePlayPause()
+        showToast("Mode Voix activé")
     }
 
-    // Real BPM-compatible Harmonic Transition with stepped audio fade
     fun harmonicDjTransition() {
         val list = tracks.value
-        if (list.size <= 1) return
+        if (list.size <= 1) {
+            showToast("Transition impossible", "Ajoutez au moins 2 morceaux.")
+            return
+        }
         val current = currentTrack.value
-        val candidates = list.filter { it.id != current.id }
-        val bestMatch = if (current.bpm > 0) {
-            candidates.minByOrNull { candidate ->
-                val bpmDiff = if (candidate.bpm > 0) abs(candidate.bpm - current.bpm) else 40
-                val keyBonus = if (candidate.musicalKey == current.musicalKey) -6 else 0
-                bpmDiff + keyBonus
-            }
-        } else {
-            candidates.firstOrNull()
-        } ?: return
-
-        val matchLabel = if (bestMatch.bpm > 0) "${bestMatch.bpm} BPM • ${bestMatch.musicalKey}" else bestMatch.genre
-        showToast("Transition harmonique vers ${bestMatch.title}", matchLabel)
+        val candidates = list.filter { it.id != current?.id }
+        val next = candidates.firstOrNull() ?: return
+        showToast("Transition vers ${next.title}", next.artist)
         audioController.fadeOutAndSwitch {
-            playTrack(bestMatch)
+            playTrack(next)
         }
     }
 
-    // Paid AI Music Generation: Real Gemini 3.8 Flash Track Remix Composition
-    fun generateSimilarRemix() {
-        if (!requireProEntitlement()) return
-        if (_isRemixGenerating.value) return
-
-        val base = currentTrack.value
-        viewModelScope.launch {
-            _isRemixGenerating.value = true
-            showToast("Composition Remix IA...", "Gemini 3.8 Flash génère un arrangement sur mesure")
-            try {
-                val remix = aiRepository.generateTrackRemix(base)
-                trackDao.insertTrack(TrackEntity.fromDomain(remix, sortOrder = 0))
-                playTrack(remix)
-                showToast("Remix IA généré !", "${remix.title} • ${remix.bpm} BPM")
-            } catch (e: Exception) {
-                showToast("Erreur Remix IA", e.localizedMessage ?: "Échec de génération.")
-            } finally {
-                _isRemixGenerating.value = false
-            }
-        }
-    }
-
-    // Paid AI Music Generation: Studio Gemini Playlist Generator
     fun generateAiPlaylist(prompt: String, targetBpm: Int, emotionalIntensity: Int) {
         if (!requireProEntitlement()) return
-        val cleanPrompt = prompt.trim().ifBlank { "Ambiance nocturne équilibrée Zouk et R&B" }
+        val catalog = tracks.value
+        if (catalog.isEmpty()) {
+            _aiPlaylistState.value = AiGenerationUiState.Error("Ajoutez d'abord vos musiques locales.")
+            return
+        }
+        val cleanPrompt = prompt.trim().ifBlank { "Sélection équilibrée pour écouter maintenant" }
         viewModelScope.launch {
             _aiPlaylistState.value = AiGenerationUiState.Loading
             try {
@@ -410,14 +418,14 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     prompt = cleanPrompt,
                     targetBpm = targetBpm,
                     emotionalIntensity = emotionalIntensity,
-                    catalog = tracks.value
+                    catalog = catalog
                 )
                 _aiPlaylistState.value = AiGenerationUiState.Success(result)
                 preferencesRepo.saveCachedMix(cleanPrompt, result)
-                showToast("Playlist Gemini générée !", "${result.trackIds.size} pistes sélectionnées")
+                showToast("Playlist créée", "${result.trackIds.size} titres sélectionnés")
             } catch (e: Exception) {
                 _aiPlaylistState.value = AiGenerationUiState.Error(
-                    e.localizedMessage ?: "Échec de la génération IA"
+                    e.localizedMessage ?: "Erreur lors de la création de la playlist."
                 )
             }
         }
@@ -430,7 +438,6 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Paid AI Co-Pilot Streaming Chat
     fun sendCopilotMessage(userText: String) {
         if (!requireProEntitlement()) return
         val clean = userText.trim()
@@ -482,7 +489,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 _chatMessages.value = _chatMessages.value.map { msg ->
                     if (msg.id == aiMsgId) {
                         msg.copy(
-                            text = "Erreur Co-Pilote IA : ${e.localizedMessage ?: "Vérifiez votre connexion et App Check."}",
+                            text = e.localizedMessage ?: "Erreur de connexion à l'assistant.",
                             isStreaming = false
                         )
                     } else msg
@@ -500,12 +507,11 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             ChatMessage(
                 id = "reset",
                 isUser = false,
-                text = "Conversation réinitialisée. Comment puis-je accompagner votre écoute ?"
+                text = "Discussion réinitialisée."
             )
         )
     }
 
-    // Equalizer & DSP Settings (Room-persisted)
     fun updateEqBand(bandIndex: Int, gainDb: Float) {
         val current = audioSettings.value.eqGainsDb.toMutableList()
         if (bandIndex in current.indices) {
@@ -527,38 +533,29 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferencesRepo.saveEqGains(gains, presetName)
         }
-        showToast("Préréglage Égaliseur : ${presetName.uppercase()}")
+        showToast("Égaliseur : ${presetName.uppercase()}")
     }
 
     fun toggleCrossfade(enabled: Boolean) {
         viewModelScope.launch { preferencesRepo.saveCrossfade(enabled) }
-        showToast("Fondu enchaîné audio : ${if (enabled) "Activé" else "Désactivé"}")
+        showToast("Fondu enchaîné : ${if (enabled) "Activé" else "Désactivé"}")
     }
 
     fun toggleNormalize(enabled: Boolean) {
         viewModelScope.launch { preferencesRepo.saveNormalize(enabled) }
-        showToast("Normalisation (-14 LUFS) : ${if (enabled) "Activée" else "Désactivée"}")
+        showToast("Normalisation : ${if (enabled) "Activée" else "Désactivée"}")
     }
 
     fun toggleSpatial3d(enabled: Boolean) {
         viewModelScope.launch { preferencesRepo.saveSpatial3d(enabled) }
-        showToast("Spatial Audio 3D Binaural : ${if (enabled) "Activé" else "Désactivé"}")
+        showToast("Audio 3D : ${if (enabled) "Activé" else "Désactivé"}")
     }
 
     fun toggleHapticFeedback(enabled: Boolean) {
         viewModelScope.launch { preferencesRepo.saveHapticFeedback(enabled) }
-        showToast("Retour haptique : ${if (enabled) "Activé" else "Désactivé"}")
+        showToast("Vibrations : ${if (enabled) "Activées" else "Désactivées"}")
     }
 
-    fun dismissOnboarding() {
-        viewModelScope.launch { preferencesRepo.saveOnboardingDismissed(true) }
-    }
-
-    fun reopenOnboarding() {
-        viewModelScope.launch { preferencesRepo.saveOnboardingDismissed(false) }
-    }
-
-    // Permissions & Local Device Audio Scanning (Android 7 to 15)
     fun refreshPermissions() {
         _permissionStatuses.value = PermissionManager.getAllStatuses(appContext)
     }
@@ -566,29 +563,68 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun scanDeviceAudioFiles() {
         refreshPermissions()
         if (!PermissionManager.hasAudioLibraryPermission(appContext)) {
-            showToast("Permission requise", "Autorisez l'accès audio ou utilisez l'import SAF")
+            showToast("Autorisation requise", "Autorisez l'accès musique ou utilisez Importer.")
             return
         }
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            scanDeviceAudioInternal(silent = false)
+        }
+    }
+
+    private suspend fun scanDeviceAudioInternal(silent: Boolean) {
+        if (_isScanning.value) return
+        _isScanning.value = true
+        try {
             val found = LocalMediaScanner.scanDeviceAudio(appContext)
             if (found.isEmpty()) {
-                showToast("Scan terminé", "Aucun fichier audio détecté sur l'appareil")
+                if (!silent) {
+                    showToast("Scan terminé", "Aucun fichier audio trouvé dans le stockage.")
+                }
             } else {
-                trackDao.insertTracks(found.mapIndexed { idx, t -> TrackEntity.fromDomain(t, sortOrder = 50 + idx) })
-                showToast("${found.size} pistes locales importées", "Ajoutées à votre bibliothèque")
+                val existingById = trackDao.getAllTracksOnce().associateBy { it.id }
+                val merged = found.mapIndexed { idx, scanned ->
+                    val old = existingById[scanned.id]
+                    val preserved = if (old != null) {
+                        scanned.copy(
+                            isLiked = old.isLiked,
+                            playCount = old.playCount,
+                            lastPlayedAt = old.lastPlayedAt,
+                            bitrateKbps = if (old.bitrateKbps > 0) old.bitrateKbps else scanned.bitrateKbps,
+                            year = old.year.ifBlank { scanned.year }
+                        )
+                    } else {
+                        scanned
+                    }
+                    TrackEntity.fromDomain(preserved, sortOrder = 20 + idx)
+                }
+                trackDao.insertTracks(merged)
+                if (!silent) {
+                    showToast("${found.size} titres trouvés", "Bibliothèque mise à jour")
+                }
             }
+        } catch (e: Exception) {
+            if (!silent) {
+                showToast("Erreur de scan", "Impossible d'analyser le stockage audio.")
+            }
+        } finally {
+            _isScanning.value = false
         }
     }
 
     fun importAudioUriSaf(uri: Uri) {
-        viewModelScope.launch {
-            val track = LocalMediaScanner.extractTrackFromUri(appContext, uri)
-            trackDao.insertTrack(TrackEntity.fromDomain(track, sortOrder = 1))
-            playTrack(track)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val track = LocalMediaScanner.extractTrackFromUri(appContext, uri)
+                trackDao.insertTrack(TrackEntity.fromDomain(track, sortOrder = 1))
+                playTrack(track)
+            } catch (e: Exception) {
+                showToast("Erreur d'importation", "Impossible d'ouvrir ce fichier audio.")
+            }
         }
     }
 
     override fun onCleared() {
+        sleepTimerJob?.cancel()
         audioController.release()
         billingManager.destroy()
         super.onCleared()
