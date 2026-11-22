@@ -1,11 +1,13 @@
 package com.example.ai
 
+import android.content.Context
 import android.util.Log
 import com.example.model.GeneratedMixResult
 import com.example.model.LyricLine
 import com.example.model.SynthProfile
 import com.example.model.Track
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.content
@@ -19,7 +21,18 @@ import org.json.JSONObject
 
 private const val TAG = "AuraAiRepository"
 
-class AuraAiRepository {
+class AuraAiRepository(private val appContext: Context) {
+
+    private fun ensureFirebaseReady() {
+        if (FirebaseApp.getApps(appContext).isEmpty()) {
+            FirebaseApp.initializeApp(appContext)
+        }
+        if (FirebaseApp.getApps(appContext).isEmpty()) {
+            throw IllegalStateException(
+                "Service IA Firebase non configuré dans cette compilation. Le lecteur local reste 100 % fonctionnel."
+            )
+        }
+    }
 
     private val playlistSchema = Schema.obj(
         properties = mapOf(
@@ -108,6 +121,7 @@ class AuraAiRepository {
         emotionalIntensity: Int,
         catalog: List<Track>
     ): GeneratedMixResult {
+        ensureFirebaseReady()
         if (catalog.isEmpty()) {
             throw IllegalStateException("Le catalogue audio est vide.")
         }
@@ -163,6 +177,7 @@ class AuraAiRepository {
     }
 
     suspend fun generateTrackRemix(baseTrack: Track): Track {
+        ensureFirebaseReady()
         val bpmHint = if (baseTrack.bpm > 0) baseTrack.bpm else 104
         val prompt = """
             Compose un nouvel arrangement synthétique 48kHz original inspiré de la piste suivante :
@@ -267,6 +282,7 @@ class AuraAiRepository {
         currentTrack: Track,
         catalog: List<Track>
     ): Flow<String> = flow {
+        ensureFirebaseReady()
         val catalogBrief = catalog.joinToString(", ") {
             val tempo = if (it.bpm > 0) "${it.bpm} BPM" else "Audio local"
             "${it.title} ($tempo, ${it.musicalKey})"

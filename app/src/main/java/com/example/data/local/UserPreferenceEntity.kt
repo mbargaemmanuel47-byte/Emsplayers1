@@ -18,5 +18,7 @@ data class UserPreferenceEntity(
     val crossfadeEnabled: Boolean = true,
     val normalizeEnabled: Boolean = true,
     val spatial3dEnabled: Boolean = false,
+    val hapticFeedbackEnabled: Boolean = true,
+    val hasDismissedOnboarding: Boolean = false,
     val updatedAtMs: Long = System.currentTimeMillis()
 )

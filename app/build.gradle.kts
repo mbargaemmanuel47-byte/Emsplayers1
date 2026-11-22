@@ -14,7 +14,7 @@ android {
 
   defaultConfig {
     applicationId = "com.aistudio.auraai.xkmqzp"
-    minSdk = 24
+    minSdk = 23
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
@@ -63,7 +63,18 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all {
+        it.systemProperty(
+            "robolectric.dependency.repo.url",
+            "https://maven-central.storage-download.googleapis.com/maven2"
+        )
+        it.systemProperty("robolectric.dependency.repo.id", "google-maven-mirror")
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true

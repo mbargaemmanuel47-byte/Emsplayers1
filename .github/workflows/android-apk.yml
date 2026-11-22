@@ -1,4 +1,4 @@
-name: Build Ems Player APK
+name: Android APK CI
 
 on:
   push:
@@ -22,11 +22,25 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Prepare debug keystore
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses & ensure SDK platforms
         run: |
+          SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36" || true
+          sdkmanager "platforms;android-36.1" || true
+          if [ ! -d "$SDK_DIR/platforms/android-36.1" ] && [ -d "$SDK_DIR/platforms/android-36" ]; then
+            ln -sfn "$SDK_DIR/platforms/android-36" "$SDK_DIR/platforms/android-36.1"
+          fi
+
+      - name: Prepare .env & debug keystore
+        run: |
+          touch .env
           if [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
-          else
+          elif [ ! -f debug.keystore ]; then
             keytool -genkeypair -v \
               -keystore debug.keystore \
               -storepass android \
@@ -44,9 +58,9 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Build Debug APK
-        run: gradle assembleDebug
+        run: gradle :app:assembleDebug --no-daemon
 
-      - name: Align and sign APK (v1 + v2 + v3)
+      - name: Align, Sign (v1 + v2) & Verify APK
         run: |
           SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           BT_DIR=$(ls -d "$SDK_DIR/build-tools"/* | sort -V | tail -n 1)
@@ -55,20 +69,19 @@ jobs:
             --min-sdk-version 21 \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
-            --v3-signing-enabled true \
             --ks debug.keystore \
             --ks-pass pass:android \
             --ks-key-alias androiddebugkey \
             --key-pass pass:android \
             --out EmsPlayer.apk \
             app-aligned.apk
-          "$BT_DIR/apksigner" verify --verbose --min-sdk-version 21 EmsPlayer.apk
+          "$BT_DIR/apksigner" verify -v --min-sdk-version 21 EmsPlayer.apk
           ls -lh EmsPlayer.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EmsPlayer-debug-apk
+          name: EmsPlayer-apk
           path: EmsPlayer.apk
           if-no-files-found: error
 
@@ -76,10 +89,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view latest-apk >/dev/null 2>&1; then
-            gh release upload latest-apk EmsPlayer.apk --clobber
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest EmsPlayer.apk --clobber
           else
-            gh release create latest-apk EmsPlayer.apk \
+            gh release create latest EmsPlayer.apk \
               --title "Ems Player APK" \
-              --notes "APK Android généré automatiquement par GitHub Actions."
+              --notes "APK Android Ems Player (signé v1 + v2, compatible Android 6.0+)."
           fi

@@ -32,7 +32,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -60,8 +62,15 @@ fun EqualizerScreen(
     onToggleCrossfade: (Boolean) -> Unit,
     onToggleNormalize: (Boolean) -> Unit,
     onToggleSpatial3d: (Boolean) -> Unit,
+    onToggleHapticFeedback: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+    val pulseHaptic = {
+        if (settings.hapticFeedbackEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isWide = maxWidth >= 820.dp
 
@@ -92,7 +101,10 @@ fun EqualizerScreen(
                         EqualizerBandsCard(
                             settings = settings,
                             onBandChange = onBandChange,
-                            onSelectPreset = onSelectPreset,
+                            onSelectPreset = {
+                                pulseHaptic()
+                                onSelectPreset(it)
+                            },
                             modifier = Modifier.weight(1.2f)
                         )
                         DspSettingsCard(
@@ -101,6 +113,10 @@ fun EqualizerScreen(
                             onToggleCrossfade = onToggleCrossfade,
                             onToggleNormalize = onToggleNormalize,
                             onToggleSpatial3d = onToggleSpatial3d,
+                            onToggleHapticFeedback = { enabled ->
+                                if (enabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleHapticFeedback(enabled)
+                            },
                             modifier = Modifier.weight(0.9f)
                         )
                     }
@@ -110,7 +126,10 @@ fun EqualizerScreen(
                     EqualizerBandsCard(
                         settings = settings,
                         onBandChange = onBandChange,
-                        onSelectPreset = onSelectPreset
+                        onSelectPreset = {
+                            pulseHaptic()
+                            onSelectPreset(it)
+                        }
                     )
                 }
                 item {
@@ -119,7 +138,11 @@ fun EqualizerScreen(
                         dspStatus = dspStatus,
                         onToggleCrossfade = onToggleCrossfade,
                         onToggleNormalize = onToggleNormalize,
-                        onToggleSpatial3d = onToggleSpatial3d
+                        onToggleSpatial3d = onToggleSpatial3d,
+                        onToggleHapticFeedback = { enabled ->
+                            if (enabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleHapticFeedback(enabled)
+                        }
                     )
                 }
             }
@@ -284,6 +307,7 @@ private fun DspSettingsCard(
     onToggleCrossfade: (Boolean) -> Unit,
     onToggleNormalize: (Boolean) -> Unit,
     onToggleSpatial3d: (Boolean) -> Unit,
+    onToggleHapticFeedback: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -295,7 +319,7 @@ private fun DspSettingsCard(
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Traitements DSP Audio", style = MaterialTheme.typography.titleMedium, color = Color.White)
+        Text("Traitements DSP & Confort", style = MaterialTheme.typography.titleMedium, color = Color.White)
 
         DspToggleRow(
             title = "Fondu Enchaîné Temps Réel",
@@ -320,6 +344,14 @@ private fun DspSettingsCard(
             onCheckedChange = onToggleSpatial3d,
             badge = "BINAURAL",
             testTag = "toggle_spatial3d"
+        )
+
+        DspToggleRow(
+            title = "Retour Haptique (Vibrations)",
+            subtitle = "Légère vibration tactile sur les contrôles de lecture (désactivable).",
+            checked = settings.hapticFeedbackEnabled,
+            onCheckedChange = onToggleHapticFeedback,
+            testTag = "toggle_haptic_feedback"
         )
 
         Column(

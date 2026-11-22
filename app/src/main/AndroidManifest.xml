@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ===================================================================== -->
-    <!-- PERMISSIONS SYSTÈME OPTIMISÉES POUR ANDROID 7 (API 24) À ANDROID 15   -->
+    <!-- PERMISSIONS SYSTÈME OPTIMISÉES POUR ANDROID 6 (API 23) À ANDROID 15   -->
     <!-- Conforme aux politiques Google Play (principe du moindre privilège)   -->
     <!-- ===================================================================== -->
 
@@ -25,14 +25,14 @@
 
     <!-- Accès sécurisé aux fichiers audio locaux :
          - Android 13 à 15 (API 33+) : READ_MEDIA_AUDIO (granulaire)
-         - Android 7 à 12 (API 24-32) : READ_EXTERNAL_STORAGE limité à maxSdkVersion 32 -->
+         - Android 6 à 12 (API 23-32) : READ_EXTERNAL_STORAGE limité à maxSdkVersion 32 -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
     <!-- Routage audio Bluetooth / Casques haute-fidélité :
-         - Android 7 à 11 (API 24-30) : BLUETOOTH limité à maxSdkVersion 30
+         - Android 6 à 11 (API 23-30) : BLUETOOTH limité à maxSdkVersion 30
          - Android 12 à 15 (API 31+) : BLUETOOTH_CONNECT (runtime) -->
     <uses-permission
         android:name="android.permission.BLUETOOTH"
@@ -77,7 +77,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Service de lecture audio en arrière-plan compatible Android 7 à 15 -->
+        <!-- Service de lecture audio en arrière-plan compatible Android 6 à 15 -->
         <service
             android:name=".audio.AuraPlaybackService"
             android:exported="false"

@@ -136,7 +136,7 @@ fun LibraryScreen(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Bibliothèque & Playlists", style = MaterialTheme.typography.headlineMedium, color = Color.White)
                 Text(
-                    "Catalogue synthétisé Ems Player et fichiers audio locaux (Android 7 à 15)",
+                    "Catalogue synthétisé Ems Player et fichiers audio locaux (Android 6 à 15)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMuted
                 )

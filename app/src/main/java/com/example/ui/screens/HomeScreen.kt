@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -76,15 +83,25 @@ fun HomeScreen(
     currentTrack: Track,
     isPlaying: Boolean,
     isProUnlocked: Boolean,
+    hasDismissedOnboarding: Boolean,
+    hapticEnabled: Boolean,
     selectedMood: String,
     onMoodSelected: (String) -> Unit,
     onPlayTrack: (Track) -> Unit,
     onPlayTrackById: (Long) -> Unit,
     onToggleLike: (Track) -> Unit,
+    onDismissOnboarding: () -> Unit,
+    onReopenOnboarding: () -> Unit,
     onOpenStudio: () -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+    val triggerHaptic = {
+        if (hapticEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val (greetingPrefix, greetingHighlight, contextBadge) = when (hour) {
         in 5..11 -> Triple("Bonjour, démarrez votre matinée avec une clarté sonore ", "sur mesure.", "Mode Matinal • Clarté & Énergie Douce")
@@ -105,6 +122,27 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // 0. 5-Second Visual Quick-Start Guide (dismissible & persisted in Room)
+            item {
+                AnimatedVisibility(
+                    visible = !hasDismissedOnboarding,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    QuickStartOnboardingCard(
+                        onDismiss = {
+                            triggerHaptic()
+                            onDismissOnboarding()
+                        },
+                        onStartFirstTrack = {
+                            triggerHaptic()
+                            tracks.firstOrNull()?.let(onPlayTrack)
+                            onDismissOnboarding()
+                        }
+                    )
+                }
+            }
+
             // 1. Hero Banner + Active Acoustic Signature
             item {
                 Box(
@@ -129,8 +167,19 @@ fun HomeScreen(
                                 greetingPrefix = greetingPrefix,
                                 greetingHighlight = greetingHighlight,
                                 isProUnlocked = isProUnlocked,
-                                onStartSession = { tracks.firstOrNull()?.let(onPlayTrack) },
-                                onOpenStudio = onOpenStudio,
+                                showGuideChip = hasDismissedOnboarding,
+                                onReopenGuide = {
+                                    triggerHaptic()
+                                    onReopenOnboarding()
+                                },
+                                onStartSession = {
+                                    triggerHaptic()
+                                    tracks.firstOrNull()?.let(onPlayTrack)
+                                },
+                                onOpenStudio = {
+                                    triggerHaptic()
+                                    onOpenStudio()
+                                },
                                 modifier = Modifier.weight(1.4f)
                             )
                             AcousticSignatureCard(
@@ -146,8 +195,19 @@ fun HomeScreen(
                                 greetingPrefix = greetingPrefix,
                                 greetingHighlight = greetingHighlight,
                                 isProUnlocked = isProUnlocked,
-                                onStartSession = { tracks.firstOrNull()?.let(onPlayTrack) },
-                                onOpenStudio = onOpenStudio
+                                showGuideChip = hasDismissedOnboarding,
+                                onReopenGuide = {
+                                    triggerHaptic()
+                                    onReopenOnboarding()
+                                },
+                                onStartSession = {
+                                    triggerHaptic()
+                                    tracks.firstOrNull()?.let(onPlayTrack)
+                                },
+                                onOpenStudio = {
+                                    triggerHaptic()
+                                    onOpenStudio()
+                                }
                             )
                             AcousticSignatureCard(
                                 currentTrack = currentTrack,
@@ -209,7 +269,10 @@ fun HomeScreen(
                                     if (active) GoldBright else BorderSubtle,
                                     RoundedCornerShape(24.dp)
                                 )
-                                .clickable { onMoodSelected(key) }
+                                .clickable {
+                                    triggerHaptic()
+                                    onMoodSelected(key)
+                                }
                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                                 .testTag("mood_pill_$key")
                         ) {
@@ -243,7 +306,10 @@ fun HomeScreen(
                             rowPresets.forEach { preset ->
                                 MoodPresetCard(
                                     preset = preset,
-                                    onClick = { onPlayTrackById(preset.trackId) },
+                                    onClick = {
+                                        triggerHaptic()
+                                        onPlayTrackById(preset.trackId)
+                                    },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -314,8 +380,14 @@ fun HomeScreen(
             TrackListRow(
                 track = track,
                 isCurrent = isCurrent,
-                onPlay = { onPlayTrack(track) },
-                onToggleLike = { onToggleLike(track) }
+                onPlay = {
+                    triggerHaptic()
+                    onPlayTrack(track)
+                },
+                onToggleLike = {
+                    triggerHaptic()
+                    onToggleLike(track)
+                }
             )
         }
 
@@ -325,36 +397,133 @@ fun HomeScreen(
 }
 
 @Composable
+private fun QuickStartOnboardingCard(
+    onDismiss: () -> Unit,
+    onStartFirstTrack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Brush.linearGradient(listOf(DeepBlue.copy(alpha = 0.92f), CardDarkSurface)))
+            .border(1.dp, BorderGold, RoundedCornerShape(22.dp))
+            .padding(16.dp)
+            .testTag("quick_start_onboarding_card"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "PRISE EN MAIN EN 3 ÉTAPES",
+                style = MaterialTheme.typography.labelMedium,
+                color = GoldBright
+            )
+            Text(
+                text = "Masquer",
+                style = MaterialTheme.typography.labelLarge,
+                color = TextSecondary,
+                modifier = Modifier
+                    .clickable(onClick = onDismiss)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .testTag("dismiss_onboarding_btn")
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OnboardingStepPill("1. Écouter", "Touchez un titre ou importez vos MP3", Modifier.weight(1f))
+            OnboardingStepPill("2. Sculpter", "Égaliseur 7 bandes & Audio 3D", Modifier.weight(1f))
+            OnboardingStepPill("3. Studio IA", "Pro débloqué : mixes Gemini", Modifier.weight(1f))
+        }
+        Button(
+            onClick = onStartFirstTrack,
+            colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Écouter le premier titre maintenant", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun OnboardingStepPill(title: String, detail: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Obsidian.copy(alpha = 0.65f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(text = title, style = MaterialTheme.typography.labelMedium, color = GoldLight, fontWeight = FontWeight.Bold)
+        Text(text = detail, style = MaterialTheme.typography.bodyMedium, fontSize = 11.sp, color = TextMuted)
+    }
+}
+
+@Composable
 private fun HeroLeftContent(
     contextBadge: String,
     greetingPrefix: String,
     greetingHighlight: String,
     isProUnlocked: Boolean,
+    showGuideChip: Boolean,
+    onReopenGuide: () -> Unit,
     onStartSession: () -> Unit,
     onOpenStudio: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(GoldBright.copy(alpha = 0.12f))
-                .border(1.dp, BorderGold, RoundedCornerShape(20.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            Row(
                 modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(GoldBright)
-            )
-            Text(
-                text = contextBadge,
-                style = MaterialTheme.typography.labelMedium,
-                color = GoldLight
-            )
+                    .weight(1f, fill = false)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(GoldBright.copy(alpha = 0.12f))
+                    .border(1.dp, BorderGold, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(GoldBright)
+                )
+                Text(
+                    text = contextBadge,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = GoldLight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (showGuideChip) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Guide ?",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = GoldBright,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .clickable(onClick = onReopenGuide)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("reopen_onboarding_btn")
+                )
+            }
         }
 
         Text(
@@ -369,7 +538,7 @@ private fun HeroLeftContent(
         )
 
         Text(
-            text = "Ems Player lit vos fichiers locaux et synthétise des univers 48kHz avec égaliseur 7 bandes (Android 7 à 15). Studio IA disponible avec Ems Player Pro.",
+            text = "Ems Player lit vos fichiers locaux hors-ligne et synthétise des univers 48kHz avec égaliseur 7 bandes (Android 6 à 15). Studio IA Pro débloqué.",
             style = MaterialTheme.typography.bodyMedium,
             color = TextSecondary
         )
@@ -398,7 +567,7 @@ private fun HeroLeftContent(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                 modifier = Modifier.testTag("hero_studio_btn")
             ) {
-                Text(if (isProUnlocked) "Studio IA" else "Studio IA • PRO", style = MaterialTheme.typography.labelLarge)
+                Text(if (isProUnlocked) "Studio IA • PRO" else "Studio IA", style = MaterialTheme.typography.labelLarge)
             }
         }
     }

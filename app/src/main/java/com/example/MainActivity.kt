@@ -30,6 +30,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.remember
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -122,6 +124,7 @@ fun AuraMainApp(viewModel: AuraViewModel) {
     val toastBanner by viewModel.toastBanner.collectAsStateWithLifecycle()
     val billingState by viewModel.billingState.collectAsStateWithLifecycle()
     val isProUnlocked by viewModel.isProUnlocked.collectAsStateWithLifecycle()
+    val hasDismissedOnboarding by viewModel.hasDismissedOnboarding.collectAsStateWithLifecycle()
     val showPaywallDialog by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
     val isRemixGenerating by viewModel.isRemixGenerating.collectAsStateWithLifecycle()
 
@@ -143,12 +146,18 @@ fun AuraMainApp(viewModel: AuraViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    fun navigateTo(route: String) {
-        if (currentRoute == route) return
-        navController.navigate(route) {
-            popUpTo(AuraRoutes.HOME) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
+    val navigateTo: (String) -> Unit = remember(navController) {
+        { route ->
+            val activeRoute = navController.currentBackStackEntry?.destination?.route
+            if (activeRoute != route) {
+                navController.navigate(route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
         }
     }
 
@@ -168,7 +177,7 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                 if (!isCompact) {
                     AuraNavigationRail(
                         currentRoute = currentRoute,
-                        onNavigate = ::navigateTo,
+                        onNavigate = navigateTo,
                         onOpenPermissions = { navigateTo(AuraRoutes.PERMISSIONS) },
                         modifier = Modifier.fillMaxHeight()
                     )
@@ -213,7 +222,7 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                             if (isCompact) {
                                 AuraBottomNavBar(
                                     currentRoute = currentRoute,
-                                    onNavigate = ::navigateTo
+                                    onNavigate = navigateTo
                                 )
                             }
                         }
@@ -233,11 +242,15 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
                                 isProUnlocked = isProUnlocked,
+                                hasDismissedOnboarding = hasDismissedOnboarding,
+                                hapticEnabled = audioSettings.hapticFeedbackEnabled,
                                 selectedMood = homeMoodFilter,
                                 onMoodSelected = viewModel::setHomeMoodFilter,
                                 onPlayTrack = { track -> viewModel.playTrack(track) },
                                 onPlayTrackById = { id -> viewModel.playTrackById(id) },
                                 onToggleLike = viewModel::toggleLike,
+                                onDismissOnboarding = viewModel::dismissOnboarding,
+                                onReopenOnboarding = viewModel::reopenOnboarding,
                                 onOpenStudio = { navigateTo(AuraRoutes.STUDIO) },
                                 onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
                             )
@@ -319,7 +332,8 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                                 onSelectPreset = viewModel::applyEqPreset,
                                 onToggleCrossfade = viewModel::toggleCrossfade,
                                 onToggleNormalize = viewModel::toggleNormalize,
-                                onToggleSpatial3d = viewModel::toggleSpatial3d
+                                onToggleSpatial3d = viewModel::toggleSpatial3d,
+                                onToggleHapticFeedback = viewModel::toggleHapticFeedback
                             )
                         }
 

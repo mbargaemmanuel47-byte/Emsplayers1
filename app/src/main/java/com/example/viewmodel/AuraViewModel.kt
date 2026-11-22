@@ -43,13 +43,20 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AuraDatabase.getInstance(appContext)
     private val trackDao = database.trackDao()
     private val preferencesRepo = UserPreferencesRepository(database.userPreferenceDao())
-    private val aiRepository = AuraAiRepository()
+    private val aiRepository = AuraAiRepository(appContext)
     private val audioController = AuraAudioController(appContext, viewModelScope)
     private val billingManager = PlayBillingManager(appContext, viewModelScope)
 
+    // Pro débloqué pour le moment (le module Google Play Billing reste prêt pour la production)
+    private val proUnlockedForNow = true
+
     val billingState: StateFlow<BillingUiState> = billingManager.uiState
     val isProUnlocked: StateFlow<Boolean> = billingState
-        .map { it.isProUnlocked }
+        .map { proUnlockedForNow || it.isProUnlocked }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), proUnlockedForNow)
+
+    val hasDismissedOnboarding: StateFlow<Boolean> = preferencesRepo.preferencesFlow
+        .map { it.hasDismissedOnboarding }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _showPaywallDialog = MutableStateFlow(false)
@@ -95,7 +102,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             ChatMessage(
                 id = "welcome",
                 isUser = false,
-                text = "Bonjour ! Je suis Aura, votre co-pilote musical propulsé par Gemini. Débloquez Ems Player Pro pour composer des mixes et remixes IA sur mesure."
+                text = "Bonjour ! Je suis Aura, votre co-pilote musical propulsé par Gemini. Tous les outils Studio IA Pro sont débloqués : demandez-moi une analyse ou un mix sur mesure !"
             )
         )
     )
@@ -191,7 +198,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun requireProEntitlement(): Boolean {
-        if (billingState.value.isProUnlocked) return true
+        if (proUnlockedForNow || billingState.value.isProUnlocked) return true
         _showPaywallDialog.value = true
         showToast(
             "Ems Player Pro requis",
@@ -536,6 +543,19 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleSpatial3d(enabled: Boolean) {
         viewModelScope.launch { preferencesRepo.saveSpatial3d(enabled) }
         showToast("Spatial Audio 3D Binaural : ${if (enabled) "Activé" else "Désactivé"}")
+    }
+
+    fun toggleHapticFeedback(enabled: Boolean) {
+        viewModelScope.launch { preferencesRepo.saveHapticFeedback(enabled) }
+        showToast("Retour haptique : ${if (enabled) "Activé" else "Désactivé"}")
+    }
+
+    fun dismissOnboarding() {
+        viewModelScope.launch { preferencesRepo.saveOnboardingDismissed(true) }
+    }
+
+    fun reopenOnboarding() {
+        viewModelScope.launch { preferencesRepo.saveOnboardingDismissed(false) }
     }
 
     // Permissions & Local Device Audio Scanning (Android 7 to 15)

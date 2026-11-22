@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [TrackEntity::class, UserPreferenceEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AuraDatabase : RoomDatabase() {

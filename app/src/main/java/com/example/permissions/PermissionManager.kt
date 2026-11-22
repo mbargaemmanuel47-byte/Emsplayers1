@@ -73,11 +73,11 @@ object PermissionManager {
                 description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     "READ_MEDIA_AUDIO (Android 13–15) : accès granulaire à votre musique locale (MP3, FLAC, WAV) sans accès aux photos/vidéos."
                 } else {
-                    "READ_EXTERNAL_STORAGE (Android 7–12, maxSdkVersion=32) : scan sécurisé des dossiers audio locaux."
+                    "READ_EXTERNAL_STORAGE (Android 6–12, maxSdkVersion=32) : scan sécurisé des dossiers audio locaux."
                 },
                 isGranted = isPermissionGranted(context, audioPerm),
                 requiresRuntimeRequest = true,
-                minApiNote = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "API 33+" else "API 24–32"
+                minApiNote = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) "API 33+" else "API 23–32"
             ),
             AndroidPermissionStatus(
                 kind = PermissionKind.NOTIFICATIONS,

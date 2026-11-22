@@ -20,12 +20,12 @@
     <string name="cd_expand_player">Ouvrir le lecteur immersif</string>
     <string name="cd_permissions_shield">Centre des permissions Android</string>
 
-    <!-- Permissions Android 7 à 15 -->
-    <string name="perm_title">Sécurité &amp; Permissions Android 7 à 15</string>
-    <string name="perm_subtitle">Gestion granulaire des autorisations système (API 24 à 35+) conforme Google Play</string>
+    <!-- Permissions Android 6 à 15 -->
+    <string name="perm_title">Sécurité &amp; Permissions Android 6 à 15</string>
+    <string name="perm_subtitle">Gestion granulaire des autorisations système (API 23 à 35+) conforme Google Play</string>
     <string name="perm_audio_title">Bibliothèque Audio Locale</string>
     <string name="perm_audio_desc_api33">READ_MEDIA_AUDIO (Android 13–15) pour scanner vos MP3, FLAC et WAV locaux.</string>
-    <string name="perm_audio_desc_legacy">READ_EXTERNAL_STORAGE (Android 7–12) avec maxSdkVersion=32.</string>
+    <string name="perm_audio_desc_legacy">READ_EXTERNAL_STORAGE (Android 6–12) avec maxSdkVersion=32.</string>
     <string name="perm_notif_title">Contrôles &amp; Notifications Média</string>
     <string name="perm_notif_desc">POST_NOTIFICATIONS (Android 13–15) pour le lecteur sur écran verrouillé et alertes Mix IA.</string>
     <string name="perm_bt_title">Casques &amp; Audio Bluetooth</string>

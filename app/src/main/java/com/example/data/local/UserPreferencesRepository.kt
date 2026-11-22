@@ -22,7 +22,8 @@ class UserPreferencesRepository(private val dao: UserPreferenceDao) {
             activePreset = entity.activeEqPreset,
             crossfadeEnabled = entity.crossfadeEnabled,
             normalizeEnabled = entity.normalizeEnabled,
-            spatial3dEnabled = entity.spatial3dEnabled
+            spatial3dEnabled = entity.spatial3dEnabled,
+            hapticFeedbackEnabled = entity.hapticFeedbackEnabled
         )
     }
 
@@ -76,5 +77,15 @@ class UserPreferencesRepository(private val dao: UserPreferenceDao) {
     suspend fun saveSpatial3d(enabled: Boolean) {
         val current = dao.getPreferencesOnce() ?: UserPreferenceEntity()
         dao.upsertPreferences(current.copy(spatial3dEnabled = enabled, updatedAtMs = System.currentTimeMillis()))
+    }
+
+    suspend fun saveHapticFeedback(enabled: Boolean) {
+        val current = dao.getPreferencesOnce() ?: UserPreferenceEntity()
+        dao.upsertPreferences(current.copy(hapticFeedbackEnabled = enabled, updatedAtMs = System.currentTimeMillis()))
+    }
+
+    suspend fun saveOnboardingDismissed(dismissed: Boolean) {
+        ensureInitialized()
+        dao.updateOnboardingDismissed(dismissed)
     }
 }

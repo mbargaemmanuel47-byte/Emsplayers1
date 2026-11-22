@@ -59,7 +59,8 @@ data class AudioSettingsState(
     val activePreset: String = "flat",
     val crossfadeEnabled: Boolean = true,
     val normalizeEnabled: Boolean = true,
-    val spatial3dEnabled: Boolean = false
+    val spatial3dEnabled: Boolean = false,
+    val hapticFeedbackEnabled: Boolean = true
 )
 
 data class ChatMessage(

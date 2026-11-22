@@ -36,6 +36,9 @@ interface UserPreferenceDao {
         updatedAt: Long = System.currentTimeMillis()
     )
 
+    @Query("UPDATE user_preferences SET hasDismissedOnboarding = :dismissed, updatedAtMs = :updatedAt WHERE id = 1")
+    suspend fun updateOnboardingDismissed(dismissed: Boolean, updatedAt: Long = System.currentTimeMillis())
+
     @Query("DELETE FROM user_preferences")
     suspend fun clearAll()
 }

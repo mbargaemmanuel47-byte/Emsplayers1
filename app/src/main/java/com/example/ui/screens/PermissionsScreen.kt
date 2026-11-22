@@ -112,7 +112,7 @@ fun PermissionsScreen(
                     Column {
                         Text(stringResource(R.string.perm_title), style = MaterialTheme.typography.titleLarge, color = Color.White)
                         Text(
-                            text = "Appareil : Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) • minSdk 24 / targetSdk 36",
+                            text = "Appareil : Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) • minSdk 23 / targetSdk 36",
                             style = MaterialTheme.typography.labelMedium,
                             color = GoldLight
                         )

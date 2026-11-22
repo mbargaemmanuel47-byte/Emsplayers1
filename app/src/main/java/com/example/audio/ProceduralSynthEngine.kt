@@ -19,7 +19,7 @@ import kotlin.math.tanh
 import kotlin.random.Random
 
 /**
- * Real-time 48kHz Stereo PCM Procedural Synthesizer using Android AudioTrack (API 24+).
+ * Real-time 48kHz Stereo PCM Procedural Synthesizer using Android AudioTrack (API 23+).
  * Supports sample-accurate seeking, 7-band tonal shaping, crossfade gain ramping, and 3D stereo widening.
  */
 class ProceduralSynthEngine(
