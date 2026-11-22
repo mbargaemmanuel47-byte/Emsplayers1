@@ -22,15 +22,25 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK licenses & ensure SDK platforms
+      - name: Accept Android SDK licenses & install SDK 36.1
         run: |
-          SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "build-tools;36.0.0" "platforms;android-36" || true
-          sdkmanager "platforms;android-36.1" || true
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+
+          SDKMANAGER=$(command -v sdkmanager || find "$SDK_DIR" -name sdkmanager -type f 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Erreur: sdkmanager introuvable dans $SDK_DIR" >&2
+            exit 1
+          fi
+
+          set +o pipefail
+          yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses >/dev/null 2>&1 || true
+          set -o pipefail
+
+          "$SDKMANAGER" --sdk_root="$SDK_DIR" "platform-tools" "build-tools;36.0.0" "platforms;android-36"
+          "$SDKMANAGER" --sdk_root="$SDK_DIR" "platforms;android-36.1" || true
+
           if [ ! -d "$SDK_DIR/platforms/android-36.1" ] && [ -d "$SDK_DIR/platforms/android-36" ]; then
             ln -sfn "$SDK_DIR/platforms/android-36" "$SDK_DIR/platforms/android-36.1"
           fi
@@ -58,11 +68,11 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --no-daemon
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Align, Sign (v1 + v2) & Verify APK
         run: |
-          SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           BT_DIR=$(ls -d "$SDK_DIR/build-tools"/* | sort -V | tail -n 1)
           "$BT_DIR/zipalign" -p -f 4 app/build/outputs/apk/debug/app-debug.apk app-aligned.apk
           "$BT_DIR/apksigner" sign \
