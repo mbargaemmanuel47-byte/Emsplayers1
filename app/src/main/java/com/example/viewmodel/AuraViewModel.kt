@@ -12,6 +12,7 @@ import com.example.billing.BillingProductOption
 import com.example.billing.BillingUiState
 import com.example.billing.PlayBillingManager
 import com.example.data.local.AuraDatabase
+import com.example.data.local.ListeningBehaviorRepository
 import com.example.data.local.LocalMediaScanner
 import com.example.data.local.TrackEntity
 import com.example.data.local.UserPreferencesRepository
@@ -19,7 +20,12 @@ import com.example.model.AiGenerationUiState
 import com.example.model.AudioSettingsState
 import com.example.model.ChatMessage
 import com.example.model.GeneratedMixResult
+import com.example.model.ListeningBehaviorProfile
+import com.example.model.SavedPlaylist
 import com.example.model.Track
+import com.example.notifications.EmmaProactiveScheduler
+import com.example.notifications.ProactiveEmmaCoordinator
+import com.example.notifications.ProactiveEvaluationOutcome
 import com.example.permissions.AndroidPermissionStatus
 import com.example.permissions.PermissionManager
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +40,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,6 +49,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AuraDatabase.getInstance(appContext)
     private val trackDao = database.trackDao()
     private val preferencesRepo = UserPreferencesRepository(database.userPreferenceDao())
+    private val behaviorRepository = ListeningBehaviorRepository(trackDao, database.listeningBehaviorDao())
     private val aiRepository = AuraAiRepository(appContext)
     private val audioController = AuraAudioController(appContext, viewModelScope)
     private val billingManager = PlayBillingManager(appContext, viewModelScope)
@@ -63,6 +71,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     val audioSettings: StateFlow<AudioSettingsState> = preferencesRepo.audioSettingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AudioSettingsState())
 
+    val behaviorProfile: StateFlow<ListeningBehaviorProfile> = behaviorRepository.observeBehaviorProfile()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ListeningBehaviorProfile())
+
+    val savedPlaylists: StateFlow<List<SavedPlaylist>> = behaviorRepository.observeSavedPlaylists()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _currentTrackId = MutableStateFlow(-1L)
     val currentTrack: StateFlow<Track?> = combine(tracks, _currentTrackId) { list, id ->
         list.find { it.id == id } ?: list.firstOrNull()
@@ -70,6 +84,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     val isPlaying: StateFlow<Boolean> = audioController.isPlaying
     val currentPositionSec: StateFlow<Float> = audioController.currentPositionSec
+    val currentDurationSec: StateFlow<Int> = audioController.durationSec
     val volume: StateFlow<Float> = audioController.volume
     val isMuted: StateFlow<Boolean> = audioController.isMuted
     val isShuffle: StateFlow<Boolean> = audioController.isShuffle
@@ -93,7 +108,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             ChatMessage(
                 id = "welcome",
                 isUser = false,
-                text = "Bonjour ! Demandez une ambiance ou un ordre d'écoute selon vos musiques."
+                text = "Bonjour ! Je suis Emma, votre IA dédiée uniquement à la musique. Parlez-moi de vos titres, d'ambiances d'écoute ou demandez-moi une playlist."
             )
         )
     )
@@ -117,6 +132,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private var toastJob: Job? = null
     private var copilotJob: Job? = null
     private var sleepTimerJob: Job? = null
+    private var lastAutoScanAtMs: Long = 0L
+    private var lastPlayedTrackForTransition: Track? = null
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -125,6 +142,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             database.userPreferenceDao().getPreferencesOnce()?.let { saved ->
                 _currentTrackId.value = saved.lastTrackId
                 _homeMoodFilter.value = saved.preferredMoodFilter
+                EmmaProactiveScheduler.ensureScheduled(appContext, saved.proactiveNotificationsEnabled)
                 if (saved.hasCachedMix && saved.cachedPlaylistTitle.isNotBlank()) {
                     val cachedIds = saved.cachedPlaylistTrackIdsCsv
                         .split(",")
@@ -140,8 +158,16 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-            if (PermissionManager.hasAudioLibraryPermission(appContext)) {
+            refreshPermissions()
+            if (areAllPermissionsGrantedNow()) {
+                lastAutoScanAtMs = System.currentTimeMillis()
                 scanDeviceAudioInternal(silent = true)
+            }
+        }
+
+        viewModelScope.launch {
+            currentTrack.collect { track ->
+                audioController.syncSelectedTrack(track)
             }
         }
 
@@ -159,6 +185,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
         audioController.onPlaybackErrorCallback = { message ->
             showToast("Erreur de lecture", message)
+        }
+
+        audioController.onDurationResolvedCallback = { trackId, realSec ->
+            viewModelScope.launch(Dispatchers.IO) {
+                trackDao.updateDuration(trackId, realSec)
+            }
         }
 
         PlaybackNotificationBridge.onPlayPauseAction = {
@@ -215,11 +247,19 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playTrack(track: Track) {
+        val previousTrack = lastPlayedTrackForTransition
+        lastPlayedTrackForTransition = track
         _currentTrackId.value = track.id
         audioController.playTrack(track)
         viewModelScope.launch(Dispatchers.IO) {
+            val nowMs = System.currentTimeMillis()
             preferencesRepo.saveLastTrackId(track.id)
-            trackDao.incrementPlayCount(track.id, System.currentTimeMillis())
+            trackDao.incrementPlayCount(track.id, nowMs)
+            behaviorRepository.recordPlayback(
+                previousTrack = previousTrack,
+                currentTrack = track,
+                timestampMs = nowMs
+            )
             if ((track.bitrateKbps == 0 || track.year.isBlank()) && !track.localUri.isNullOrBlank()) {
                 LocalMediaScanner.readBitrateAndYear(appContext, track.localUri)?.let { (br, yr) ->
                     trackDao.updateAudioDetails(
@@ -364,14 +404,24 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _aiPlaylistState.value = AiGenerationUiState.Loading
             try {
+                val snapshot = withContext(Dispatchers.IO) { behaviorRepository.buildProfileSnapshot() }
                 val result = aiRepository.generateCustomPlaylist(
                     prompt = prompt,
                     targetBpm = 104,
                     emotionalIntensity = 75,
-                    catalog = catalog
+                    catalog = catalog,
+                    behaviorProfile = snapshot
                 )
                 _aiPlaylistState.value = AiGenerationUiState.Success(result)
                 preferencesRepo.saveCachedMix(prompt, result)
+                withContext(Dispatchers.IO) {
+                    behaviorRepository.savePlaylist(
+                        title = result.title,
+                        description = result.rationale,
+                        trackIds = result.trackIds,
+                        isAiGenerated = true
+                    )
+                }
                 result.trackIds.firstOrNull()?.let { playTrackById(it) }
                 onMixReady()
             } catch (e: Exception) {
@@ -414,14 +464,24 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _aiPlaylistState.value = AiGenerationUiState.Loading
             try {
+                val snapshot = withContext(Dispatchers.IO) { behaviorRepository.buildProfileSnapshot() }
                 val result = aiRepository.generateCustomPlaylist(
                     prompt = cleanPrompt,
                     targetBpm = targetBpm,
                     emotionalIntensity = emotionalIntensity,
-                    catalog = catalog
+                    catalog = catalog,
+                    behaviorProfile = snapshot
                 )
                 _aiPlaylistState.value = AiGenerationUiState.Success(result)
                 preferencesRepo.saveCachedMix(cleanPrompt, result)
+                withContext(Dispatchers.IO) {
+                    behaviorRepository.savePlaylist(
+                        title = result.title,
+                        description = result.rationale,
+                        trackIds = result.trackIds,
+                        isAiGenerated = true
+                    )
+                }
                 showToast("Playlist créée", "${result.trackIds.size} titres sélectionnés")
             } catch (e: Exception) {
                 _aiPlaylistState.value = AiGenerationUiState.Error(
@@ -436,6 +496,41 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         if (state is AiGenerationUiState.Success) {
             state.data.trackIds.firstOrNull()?.let { playTrackById(it) }
         }
+    }
+
+    fun createCustomPlaylist(title: String, trackIds: List<Long>) {
+        if (trackIds.isEmpty()) {
+            showToast("Playlist vide", "Sélectionnez au moins un morceau.")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            behaviorRepository.savePlaylist(
+                title = title,
+                description = "Playlist personnalisée (${trackIds.size} titres)",
+                trackIds = trackIds,
+                isAiGenerated = false
+            )
+            showToast("Playlist enregistrée", title)
+        }
+    }
+
+    fun playSavedPlaylist(playlist: SavedPlaylist) {
+        val firstTrack = playlist.trackIds.firstOrNull()?.let { id -> tracks.value.find { it.id == id } }
+        if (firstTrack == null) {
+            showToast("Titres introuvables", "Scannez à nouveau votre bibliothèque.")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            behaviorRepository.incrementPlaylistPlayCount(playlist.id)
+        }
+        playTrack(firstTrack)
+    }
+
+    fun deleteSavedPlaylist(playlistId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            behaviorRepository.deletePlaylist(playlistId)
+        }
+        showToast("Playlist supprimée")
     }
 
     fun sendCopilotMessage(userText: String) {
@@ -462,11 +557,15 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         copilotJob = viewModelScope.launch {
             try {
                 val catalog = tracks.value
+                val historySnapshot = _chatMessages.value.dropLast(2)
+                val snapshot = withContext(Dispatchers.IO) { behaviorRepository.buildProfileSnapshot() }
                 var latestText = ""
                 aiRepository.streamCopilotReply(
                     userMessage = clean,
                     currentTrack = currentTrack.value,
-                    catalog = catalog
+                    catalog = catalog,
+                    recentHistory = historySnapshot,
+                    behaviorProfile = snapshot
                 ).collect { partial ->
                     latestText = partial
                     val matchedTrack = catalog.firstOrNull {
@@ -489,7 +588,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 _chatMessages.value = _chatMessages.value.map { msg ->
                     if (msg.id == aiMsgId) {
                         msg.copy(
-                            text = e.localizedMessage ?: "Erreur de connexion à l'assistant.",
+                            text = e.localizedMessage ?: "Erreur de connexion avec Emma.",
                             isStreaming = false
                         )
                     } else msg
@@ -507,7 +606,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             ChatMessage(
                 id = "reset",
                 isUser = false,
-                text = "Discussion réinitialisée."
+                text = "Discussion réinitialisée. Je suis Emma, uniquement là pour parler musique avec vous !"
             )
         )
     }
@@ -556,17 +655,87 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         showToast("Vibrations : ${if (enabled) "Activées" else "Désactivées"}")
     }
 
+    fun toggleProactiveNotifications(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepo.saveProactiveNotificationsEnabled(enabled)
+            EmmaProactiveScheduler.ensureScheduled(appContext, enabled)
+        }
+        showToast("Suggestions d'Emma : ${if (enabled) "Activées" else "Désactivées"}")
+    }
+
+    fun triggerProactiveNotificationNow() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val outcome = ProactiveEmmaCoordinator.createDefault(appContext)
+                .evaluateAndNotifyIfDue(forceTest = true)
+            withContext(Dispatchers.Main) {
+                when (outcome) {
+                    is ProactiveEvaluationOutcome.Notified ->
+                        showToast("Notification d'Emma envoyée", outcome.draft.message)
+                    ProactiveEvaluationOutcome.SkippedOffline ->
+                        showToast("Hors ligne", "Connectez-vous à Internet pour générer une alerte Emma.")
+                    ProactiveEvaluationOutcome.SkippedNoPermission ->
+                        showToast("Autorisation requise", "Activez les notifications dans Autorisations.")
+                    ProactiveEvaluationOutcome.SkippedNoHabitSignal ->
+                        showToast("Bibliothèque vide", "Scannez ou écoutez un titre d'abord.")
+                    ProactiveEvaluationOutcome.SkippedAiUnavailable ->
+                        showToast("Emma indisponible", "Impossible de joindre Emma pour le moment.")
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun handleProactiveNotificationLaunch(message: String?, suggestedTrackId: Long?) {
+        val clean = message?.trim().orEmpty()
+        if (clean.isBlank()) return
+        val alreadyExists = _chatMessages.value.any { !it.isUser && it.text == clean }
+        if (!alreadyExists) {
+            _chatMessages.value = _chatMessages.value + ChatMessage(
+                id = "notif_${System.currentTimeMillis()}",
+                isUser = false,
+                text = clean,
+                recommendedTrackId = suggestedTrackId?.takeIf { it > 0L },
+                isStreaming = false
+            )
+        }
+    }
+
+    private fun areAllPermissionsGrantedNow(): Boolean {
+        return _permissionStatuses.value.all { it.isGranted }
+    }
+
     fun refreshPermissions() {
         _permissionStatuses.value = PermissionManager.getAllStatuses(appContext)
+    }
+
+    fun onAppResumed() {
+        refreshBilling()
+        refreshPermissions()
+        triggerAutoScanIfAllGranted(forceIfEmpty = true)
+    }
+
+    fun triggerAutoScanIfAllGranted(forceIfEmpty: Boolean = false) {
+        refreshPermissions()
+        if (!areAllPermissionsGrantedNow()) return
+        val now = System.currentTimeMillis()
+        val cooledDown = now - lastAutoScanAtMs >= 15_000L
+        if (_isScanning.value) return
+        if (cooledDown || (forceIfEmpty && tracks.value.isEmpty())) {
+            lastAutoScanAtMs = now
+            viewModelScope.launch(Dispatchers.IO) {
+                scanDeviceAudioInternal(silent = tracks.value.isNotEmpty())
+            }
+        }
     }
 
     fun scanDeviceAudioFiles() {
         refreshPermissions()
         if (!PermissionManager.hasAudioLibraryPermission(appContext)) {
-            showToast("Autorisation requise", "Autorisez l'accès musique ou utilisez Importer.")
+            showToast("Autorisation requise", "Autorisez l'accès musique pour scanner.")
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
+            lastAutoScanAtMs = System.currentTimeMillis()
             scanDeviceAudioInternal(silent = false)
         }
     }
@@ -589,6 +758,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                             isLiked = old.isLiked,
                             playCount = old.playCount,
                             lastPlayedAt = old.lastPlayedAt,
+                            durationSec = if (old.durationSec > 0 && old.durationSec != 180) old.durationSec else scanned.durationSec,
                             bitrateKbps = if (old.bitrateKbps > 0) old.bitrateKbps else scanned.bitrateKbps,
                             year = old.year.ifBlank { scanned.year }
                         )
@@ -598,7 +768,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     TrackEntity.fromDomain(preserved, sortOrder = 20 + idx)
                 }
                 trackDao.insertTracks(merged)
-                if (!silent) {
+                if (!silent || existingById.isEmpty()) {
                     showToast("${found.size} titres trouvés", "Bibliothèque mise à jour")
                 }
             }
@@ -616,7 +786,9 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val track = LocalMediaScanner.extractTrackFromUri(appContext, uri)
                 trackDao.insertTrack(TrackEntity.fromDomain(track, sortOrder = 1))
-                playTrack(track)
+                withContext(Dispatchers.Main) {
+                    playTrack(track)
+                }
             } catch (e: Exception) {
                 showToast("Erreur d'importation", "Impossible d'ouvrir ce fichier audio.")
             }

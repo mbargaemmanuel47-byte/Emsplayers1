@@ -4,7 +4,7 @@
     <string name="app_tagline">Lecteur Audio</string>
     <string name="nav_home">Accueil</string>
     <string name="nav_player">Lecteur</string>
-    <string name="nav_studio">Studio IA</string>
+    <string name="nav_studio">Emma</string>
     <string name="nav_library">Biblio</string>
     <string name="nav_equalizer">Égaliseur</string>
     <string name="nav_permissions">Autorisations</string>
@@ -35,4 +35,6 @@
     <!-- Notification Service -->
     <string name="notif_channel_name">Lecture Em Player</string>
     <string name="notif_channel_desc">Contrôles de lecture audio</string>
+    <string name="emma_notif_channel_name">Suggestions d\'Emma</string>
+    <string name="emma_notif_channel_desc">Messages musicaux personnalisés d\'Emma</string>
 </resources>

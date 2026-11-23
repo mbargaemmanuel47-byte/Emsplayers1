@@ -25,21 +25,29 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,6 +66,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.model.SavedPlaylist
 import com.example.model.Track
 import com.example.permissions.PermissionManager
 import com.example.ui.theme.BorderGold
@@ -74,6 +83,7 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun LibraryScreen(
     tracks: List<Track>,
+    savedPlaylists: List<SavedPlaylist>,
     currentTrack: Track?,
     isScanning: Boolean,
     globalSearch: String,
@@ -84,6 +94,9 @@ fun LibraryScreen(
     onDeleteTrack: (Track) -> Unit,
     onScanDeviceAudio: () -> Unit,
     onImportSafUri: (Uri) -> Unit,
+    onCreatePlaylist: (String, List<Long>) -> Unit,
+    onPlaySavedPlaylist: (SavedPlaylist) -> Unit,
+    onDeleteSavedPlaylist: (Long) -> Unit,
     onRefreshPermissions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -91,6 +104,7 @@ fun LibraryScreen(
     var selectedTab by rememberSaveable { mutableStateOf("all") }
     var searchText by rememberSaveable(globalSearch) { mutableStateOf(globalSearch) }
     var sortMode by rememberSaveable { mutableStateOf("recent") }
+    var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
 
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -301,6 +315,77 @@ fun LibraryScreen(
 
         when (selectedTab) {
             "playlists" -> {
+                if (tracks.isNotEmpty()) {
+                    item {
+                        Button(
+                            onClick = { showCreatePlaylistDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .testTag("create_playlist_btn")
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Créer une playlist", fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                if (savedPlaylists.isNotEmpty()) {
+                    items(savedPlaylists, key = { "saved_${it.id}" }) { playlist ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Brush.linearGradient(listOf(DeepBlue.copy(alpha = 0.8f), CardDarkSurface)))
+                                .border(1.dp, BorderGold, RoundedCornerShape(14.dp))
+                                .clickable { onPlaySavedPlaylist(playlist) }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(GoldBright.copy(alpha = 0.16f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Filled.LibraryMusic, contentDescription = null, tint = GoldBright, modifier = Modifier.size(18.dp))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = playlist.title,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${playlist.trackIds.size} titres • ${if (playlist.isAiGenerated) "Emma IA" else "Perso"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = GoldLight,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = { onDeleteSavedPlaylist(playlist.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.DeleteOutline,
+                                    contentDescription = "Supprimer",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 val smartLists = buildList {
                     val topPlayed = tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
                     if (topPlayed.isNotEmpty()) {
@@ -316,9 +401,9 @@ fun LibraryScreen(
                     }
                 }
 
-                if (smartLists.isEmpty()) {
+                if (smartLists.isEmpty() && savedPlaylists.isEmpty()) {
                     item {
-                        EmptyLibraryNotice("Écoutez ou aimez des morceaux pour générer vos listes automatiques.")
+                        EmptyLibraryNotice("Écoutez, aimez ou créez une playlist pour la retrouver ici.")
                     }
                 } else {
                     items(smartLists) { (title, subtitle, firstTrack) ->
@@ -326,8 +411,8 @@ fun LibraryScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Brush.linearGradient(listOf(DeepBlue.copy(alpha = 0.75f), CardDarkSurface)))
-                                .border(1.dp, BorderGold, RoundedCornerShape(14.dp))
+                                .background(Brush.linearGradient(listOf(DeepBlue.copy(alpha = 0.65f), CardDarkSurface)))
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
                                 .clickable { onPlayTrack(firstTrack) }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -337,10 +422,10 @@ fun LibraryScreen(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(GoldBright.copy(alpha = 0.16f)),
+                                    .background(Color.White.copy(alpha = 0.08f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Filled.LibraryMusic, contentDescription = null, tint = GoldBright, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Filled.LibraryMusic, contentDescription = null, tint = GoldLight, modifier = Modifier.size(18.dp))
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -437,6 +522,98 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+
+    if (showCreatePlaylistDialog) {
+        var playlistTitle by remember { mutableStateOf("") }
+        val selectedIds = remember { mutableStateListOf<Long>() }
+        AlertDialog(
+            onDismissRequest = { showCreatePlaylistDialog = false },
+            containerColor = CardDarkSurface,
+            titleContentColor = Color.White,
+            textContentColor = TextSecondary,
+            title = { Text("Nouvelle playlist", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = playlistTitle,
+                        onValueChange = { playlistTitle = it },
+                        singleLine = true,
+                        placeholder = { Text("Nom de la playlist...", fontSize = 12.sp, color = TextMuted) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GoldBright,
+                            unfocusedBorderColor = BorderSubtle,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(tracks.take(60), key = { "pick_${it.id}" }) { track ->
+                            val checked = selectedIds.contains(track.id)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        if (checked) selectedIds.remove(track.id) else selectedIds.add(track.id)
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = { isChecked ->
+                                        if (isChecked) {
+                                            if (!selectedIds.contains(track.id)) selectedIds.add(track.id)
+                                        } else {
+                                            selectedIds.remove(track.id)
+                                        }
+                                    },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = GoldBright,
+                                        checkmarkColor = Obsidian
+                                    )
+                                )
+                                Text(
+                                    text = "${track.title} — ${track.artist}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val finalIds = if (selectedIds.isNotEmpty()) {
+                            selectedIds.toList()
+                        } else {
+                            tracks.take(5).map { it.id }
+                        }
+                        onCreatePlaylist(playlistTitle.ifBlank { "Ma playlist" }, finalIds)
+                        showCreatePlaylistDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian)
+                ) {
+                    Text("Enregistrer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreatePlaylistDialog = false }) {
+                    Text("Annuler", color = TextMuted)
+                }
+            }
+        )
     }
 }
 

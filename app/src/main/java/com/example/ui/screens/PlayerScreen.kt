@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -42,10 +41,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Track
 import com.example.ui.components.AudioVisualizerCanvas
+import com.example.ui.components.CompactGoldSlider
 import com.example.ui.components.TrackArtworkCanvas
 import com.example.ui.components.formatDuration
 import com.example.ui.components.formatFileSize
@@ -84,6 +87,7 @@ fun PlayerScreen(
     track: Track?,
     isPlaying: Boolean,
     positionSec: Float,
+    durationSec: Int,
     volume: Float,
     isMuted: Boolean,
     isShuffle: Boolean,
@@ -91,8 +95,8 @@ fun PlayerScreen(
     isProUnlocked: Boolean,
     sleepTimerMinutes: Int,
     spectrumBars: List<Float>,
-    topOverlayPadding: Dp,
-    bottomOverlayPadding: Dp,
+    topOverlayPadding: Dp = 0.dp,
+    bottomOverlayPadding: Dp = 0.dp,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -120,7 +124,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkSurface.copy(alpha = 0.88f))
+                    .background(CardDarkSurface.copy(alpha = 0.90f))
                     .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -139,7 +143,7 @@ fun PlayerScreen(
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "Ouvrez la bibliothèque pour scanner ou importer vos fichiers audio.",
+                    text = "Ouvrez l'onglet Biblio pour scanner ou importer vos fichiers audio.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextMuted,
                     textAlign = TextAlign.Center
@@ -150,12 +154,14 @@ fun PlayerScreen(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.testTag("player_open_library_btn")
                 ) {
-                    Text("Ouvrir la bibliothèque", fontSize = 12.sp)
+                    Text("Ouvrir Biblio", fontSize = 12.sp)
                 }
             }
         }
         return
     }
+
+    val effectiveDurationSec = durationSec.coerceAtLeast(track.durationSec).coerceAtLeast(1)
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isWide = maxWidth >= 780.dp
@@ -163,24 +169,25 @@ fun PlayerScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 14.dp,
-                end = 14.dp,
-                top = topOverlayPadding + 10.dp,
-                bottom = bottomOverlayPadding + 14.dp
+                start = 12.dp,
+                end = 12.dp,
+                top = topOverlayPadding + 8.dp,
+                bottom = bottomOverlayPadding + 12.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (isWide) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         PlayerDeckCard(
                             track = track,
                             isPlaying = isPlaying,
                             positionSec = positionSec,
+                            durationSec = effectiveDurationSec,
                             volume = volume,
                             isMuted = isMuted,
                             isShuffle = isShuffle,
@@ -215,6 +222,7 @@ fun PlayerScreen(
                         track = track,
                         isPlaying = isPlaying,
                         positionSec = positionSec,
+                        durationSec = effectiveDurationSec,
                         volume = volume,
                         isMuted = isMuted,
                         isShuffle = isShuffle,
@@ -252,6 +260,7 @@ private fun PlayerDeckCard(
     track: Track,
     isPlaying: Boolean,
     positionSec: Float,
+    durationSec: Int,
     volume: Float,
     isMuted: Boolean,
     isShuffle: Boolean,
@@ -268,46 +277,109 @@ private fun PlayerDeckCard(
     onToggleLike: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val progress = if (track.durationSec > 0) (positionSec / track.durationSec).coerceIn(0f, 1f) else 0f
+    val liveProgress = (positionSec / durationSec.coerceAtLeast(1)).coerceIn(0f, 1f)
+    var isSeeking by remember(track.id) { mutableStateOf(false) }
+    var dragFraction by remember(track.id) { mutableFloatStateOf(0f) }
+
+    val displayedProgress = if (isSeeking) dragFraction else liveProgress
+    val displayedSec = if (isSeeking) {
+        (dragFraction * durationSec).toInt()
+    } else {
+        positionSec.toInt()
+    }
+    val remainingSec = (durationSec - displayedSec).coerceAtLeast(0)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(
                 Brush.radialGradient(
-                    colors = listOf(Color(track.primaryColorHex).copy(alpha = 0.22f), CardDarkSurface.copy(alpha = 0.90f))
+                    colors = listOf(Color(track.primaryColorHex).copy(alpha = 0.20f), CardDarkSurface.copy(alpha = 0.94f))
                 )
             )
-            .border(1.dp, BorderGold, RoundedCornerShape(20.dp))
-            .padding(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp)
+            .border(1.dp, BorderGold, RoundedCornerShape(18.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Compact horizontal header: Artwork + Metadata + Like button
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = formatPlayCount(track.playCount),
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 10.5.sp,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                color = GoldLight,
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(GoldBright.copy(alpha = 0.14f))
-                    .border(1.dp, BorderGold, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            )
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(GoldBright, RoyalBlueAccent, GoldMetallic)))
+                    .padding(1.5.dp)
+            ) {
+                TrackArtworkCanvas(
+                    track = track,
+                    cornerRadius = 12.5.dp,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (track.album.isNotBlank() && track.album != "Stockage local") {
+                        "${track.artist} • ${track.album}"
+                    } else {
+                        track.artist
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.sp,
+                    color = GoldLight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = formatPlayCount(track.playCount),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = GoldLight,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(GoldBright.copy(alpha = 0.14f))
+                            .border(1.dp, BorderGold, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                    if (isPlaying) {
+                        Text(
+                            text = "En lecture",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            color = EmeraldAccent
+                        )
+                    }
+                }
+            }
 
             IconButton(
                 onClick = onToggleLike,
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
                     .testTag("player_like_button")
@@ -316,87 +388,56 @@ private fun PlayerDeckCard(
                     imageVector = if (track.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     contentDescription = stringResource(R.string.cd_favorite),
                     tint = if (track.isLiked) RoseError else Color.White,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
         }
 
-        Box(
-            modifier = Modifier
-                .size(124.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Brush.linearGradient(listOf(GoldBright, RoyalBlueAccent, GoldMetallic)))
-                .padding(2.dp)
-        ) {
-            TrackArtworkCanvas(
-                track = track,
-                cornerRadius = 16.dp,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = if (track.album.isNotBlank() && track.album != "Stockage local") {
-                    "${track.artist} • ${track.album}"
-                } else {
-                    track.artist
-                },
-                style = MaterialTheme.typography.bodySmall,
-                fontSize = 11.sp,
-                color = GoldLight,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-        }
-
+        // Sleek spectrum visualizer
         AudioVisualizerCanvas(
             bars = spectrumBars,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp)
+                .height(30.dp)
         )
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Slider(
-                value = progress,
-                onValueChange = onSeekFraction,
-                colors = SliderDefaults.colors(
-                    thumbColor = GoldBright,
-                    activeTrackColor = GoldBright,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.14f)
-                ),
-                modifier = Modifier.testTag("player_progress_slider")
+        // Sleek seek bar + live elapsed / total & remaining counters
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            CompactGoldSlider(
+                value = displayedProgress,
+                onValueChange = { frac ->
+                    isSeeking = true
+                    dragFraction = frac
+                },
+                onValueChangeFinished = {
+                    val commitFraction = dragFraction
+                    isSeeking = false
+                    onSeekFraction(commitFraction)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("player_progress_slider")
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = formatDuration(positionSec.toInt()),
+                    text = formatDuration(displayedSec),
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
+                    fontSize = 10.5.sp,
                     maxLines = 1,
                     softWrap = false,
-                    color = TextMuted
+                    color = GoldLight,
+                    modifier = Modifier.testTag("player_elapsed_time")
                 )
                 Text(
-                    text = "-${formatDuration((track.durationSec - positionSec.toInt()).coerceAtLeast(0))}",
+                    text = "-${formatDuration(remainingSec)} • ${formatDuration(durationSec)}",
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
+                    fontSize = 10.5.sp,
                     maxLines = 1,
                     softWrap = false,
                     color = TextMuted
@@ -404,6 +445,7 @@ private fun PlayerDeckCard(
             }
         }
 
+        // Compact transport controls
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -426,7 +468,7 @@ private fun PlayerDeckCard(
             IconButton(
                 onClick = onPrevious,
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
                     .testTag("player_prev_btn")
@@ -441,7 +483,7 @@ private fun PlayerDeckCard(
 
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(listOf(GoldBright, GoldMetallic)))
                     .clickable(onClick = onTogglePlay)
@@ -452,14 +494,14 @@ private fun PlayerDeckCard(
                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play_pause),
                     tint = Obsidian,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
             IconButton(
                 onClick = onNext,
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.08f))
                     .testTag("player_next_btn")
@@ -487,27 +529,23 @@ private fun PlayerDeckCard(
             }
         }
 
+        // Sleek compact volume row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            IconButton(onClick = onToggleMute, modifier = Modifier.size(34.dp)) {
+            IconButton(onClick = onToggleMute, modifier = Modifier.size(30.dp)) {
                 Icon(
                     imageVector = if (isMuted || volume == 0f) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = stringResource(R.string.cd_mute),
                     tint = GoldLight,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
-            Slider(
+            CompactGoldSlider(
                 value = if (isMuted) 0f else volume,
                 onValueChange = onVolumeChange,
-                colors = SliderDefaults.colors(
-                    thumbColor = GoldBright,
-                    activeTrackColor = GoldBright,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.14f)
-                ),
                 modifier = Modifier.weight(1f)
             )
             Text(
@@ -517,7 +555,7 @@ private fun PlayerDeckCard(
                 maxLines = 1,
                 softWrap = false,
                 textAlign = TextAlign.End,
-                modifier = Modifier.widthIn(min = 34.dp)
+                modifier = Modifier.widthIn(min = 32.dp)
             )
         }
     }
@@ -541,11 +579,11 @@ private fun PlayerMetadataAndActionsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(CardDarkSurface.copy(alpha = 0.88f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDarkSurface.copy(alpha = 0.92f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "Informations du fichier",
@@ -616,10 +654,10 @@ private fun PlayerMetadataAndActionsCard(
 private fun CompactMetaTile(label: String, value: String, color: Color, modifier: Modifier) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(11.dp))
-            .background(Obsidian.copy(alpha = 0.65f))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(11.dp))
-            .padding(vertical = 7.dp, horizontal = 4.dp),
+            .clip(RoundedCornerShape(10.dp))
+            .background(Obsidian.copy(alpha = 0.72f))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -658,7 +696,7 @@ private fun CompactPlayerAction(
             .background(Color.White.copy(alpha = 0.05f))
             .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(10.dp),
+            .padding(9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {

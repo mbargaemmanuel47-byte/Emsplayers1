@@ -18,19 +18,21 @@ class NavigationBugTest {
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun `navigate away from home to every tab and return cleanly to home`() {
+    fun `navigate away from home to every tab and verify scanner and importer live strictly in library`() {
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("home_import_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_filter_all").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_open_library_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_scan_btn").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("home_import_btn").assertDoesNotExist()
 
         // Studio -> Home
         composeTestRule.onNodeWithTag("nav_studio").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("studio_prompt_input").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("studio_chat_input").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_filter_all").assertIsDisplayed()
 
         // Player -> Home
         composeTestRule.onNodeWithTag("nav_player").performClick()
@@ -39,12 +41,13 @@ class NavigationBugTest {
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_filter_all").assertIsDisplayed()
 
         // Library -> Equalizer -> Home
         composeTestRule.onNodeWithTag("nav_library").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("saf_import_audio_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("scan_device_audio_btn").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_equalizer").performClick()
         composeTestRule.waitForIdle()
@@ -52,7 +55,7 @@ class NavigationBugTest {
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_filter_all").assertIsDisplayed()
 
         // Permissions -> Home
         composeTestRule.onNodeWithTag("permissions_center_button").performClick()
@@ -61,6 +64,6 @@ class NavigationBugTest {
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("home_scan_btn").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_filter_all").assertIsDisplayed()
     }
 }

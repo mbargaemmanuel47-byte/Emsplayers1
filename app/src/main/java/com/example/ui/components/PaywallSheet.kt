@@ -143,7 +143,7 @@ fun ProPaywallDialog(
                 ) {
                     PaywallBenefitRow("Création de playlists et mixes sur mesure")
                     PaywallBenefitRow("Sélections intelligentes à partir de vos musiques")
-                    PaywallBenefitRow("Assistant musical en direct")
+                    PaywallBenefitRow("Emma, votre IA musicale en direct")
                 }
 
                 if (billingState.isConnecting) {

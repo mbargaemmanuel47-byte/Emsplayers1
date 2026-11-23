@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -67,6 +70,7 @@ fun EqualizerScreen(
     onToggleNormalize: (Boolean) -> Unit,
     onToggleSpatial3d: (Boolean) -> Unit,
     onToggleHapticFeedback: (Boolean) -> Unit,
+    onToggleProactiveNotifications: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -137,6 +141,7 @@ fun EqualizerScreen(
                                 if (enabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onToggleHapticFeedback(enabled)
                             },
+                            onToggleProactiveNotifications = onToggleProactiveNotifications,
                             modifier = Modifier.weight(0.9f)
                         )
                     }
@@ -161,7 +166,8 @@ fun EqualizerScreen(
                         onToggleHapticFeedback = { enabled ->
                             if (enabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onToggleHapticFeedback(enabled)
-                        }
+                        },
+                        onToggleProactiveNotifications = onToggleProactiveNotifications
                     )
                 }
             }
@@ -294,6 +300,7 @@ private fun EqualizerBandsCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VerticalEqSlider(
     value: Float,
@@ -309,6 +316,15 @@ private fun VerticalEqSlider(
             activeTrackColor = GoldBright,
             inactiveTrackColor = Color.White.copy(alpha = 0.16f)
         ),
+        thumb = {
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(GoldBright)
+                    .border(2.dp, Obsidian, CircleShape)
+            )
+        },
         modifier = modifier
             .graphicsLayer {
                 rotationZ = 270f
@@ -337,6 +353,7 @@ private fun DspSettingsCard(
     onToggleNormalize: (Boolean) -> Unit,
     onToggleSpatial3d: (Boolean) -> Unit,
     onToggleHapticFeedback: (Boolean) -> Unit,
+    onToggleProactiveNotifications: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -380,6 +397,14 @@ private fun DspSettingsCard(
             checked = settings.hapticFeedbackEnabled,
             onCheckedChange = onToggleHapticFeedback,
             testTag = "toggle_haptic_feedback"
+        )
+
+        DspToggleRow(
+            title = "Suggestions d'Emma",
+            subtitle = "Notifications personnalisées selon vos habitudes",
+            checked = settings.proactiveNotificationsEnabled,
+            onCheckedChange = onToggleProactiveNotifications,
+            testTag = "toggle_proactive_notifications"
         )
     }
 }

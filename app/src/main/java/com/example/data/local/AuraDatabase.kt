@@ -6,13 +6,20 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [TrackEntity::class, UserPreferenceEntity::class],
-    version = 5,
+    entities = [
+        TrackEntity::class,
+        UserPreferenceEntity::class,
+        ListeningEventEntity::class,
+        TrackTransitionEntity::class,
+        SavedPlaylistEntity::class
+    ],
+    version = 6,
     exportSchema = false
 )
 abstract class AuraDatabase : RoomDatabase() {
     abstract fun trackDao(): TrackDao
     abstract fun userPreferenceDao(): UserPreferenceDao
+    abstract fun listeningBehaviorDao(): ListeningBehaviorDao
 
     companion object {
         @Volatile

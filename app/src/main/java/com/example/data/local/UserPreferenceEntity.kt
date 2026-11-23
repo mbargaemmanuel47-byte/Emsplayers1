@@ -19,6 +19,10 @@ data class UserPreferenceEntity(
     val normalizeEnabled: Boolean = true,
     val spatial3dEnabled: Boolean = false,
     val hapticFeedbackEnabled: Boolean = true,
+    val proactiveNotificationsEnabled: Boolean = true,
+    val lastProactiveNotifAtMs: Long = 0L,
+    val lastProactiveNotifSlot: String = "",
+    val lastProactiveNotifMessage: String = "",
     val hasDismissedOnboarding: Boolean = false,
     val updatedAtMs: Long = System.currentTimeMillis()
 )

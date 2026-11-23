@@ -32,6 +32,9 @@ interface TrackDao {
     @Query("UPDATE tracks SET bitrateKbps = :bitrateKbps, year = :year WHERE id = :trackId")
     suspend fun updateAudioDetails(trackId: Long, bitrateKbps: Int, year: String)
 
+    @Query("UPDATE tracks SET durationSec = :durationSec WHERE id = :trackId")
+    suspend fun updateDuration(trackId: Long, durationSec: Int)
+
     @Query("DELETE FROM tracks WHERE id = :trackId")
     suspend fun deleteTrack(trackId: Long)
 

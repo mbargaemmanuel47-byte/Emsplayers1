@@ -22,6 +22,7 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import com.example.MainActivity
 import com.example.R
 
@@ -40,6 +41,7 @@ class AuraPlaybackService : Service() {
         const val NOTIFICATION_ID = 4201
 
         const val ACTION_UPDATE = "com.example.emplayer.ACTION_UPDATE"
+        const val ACTION_PROGRESS = "com.example.emplayer.ACTION_PROGRESS"
         const val ACTION_PLAY_PAUSE = "com.example.emplayer.ACTION_PLAY_PAUSE"
         const val ACTION_NEXT = "com.example.emplayer.ACTION_NEXT"
         const val ACTION_PREV = "com.example.emplayer.ACTION_PREV"
@@ -84,6 +86,21 @@ class AuraPlaybackService : Service() {
             } else {
                 runCatching { context.startService(intent) }
             }
+        }
+
+        fun syncProgress(
+            context: Context,
+            positionMs: Long,
+            durationMs: Long,
+            isPlaying: Boolean
+        ) {
+            val intent = Intent(context, AuraPlaybackService::class.java).apply {
+                action = ACTION_PROGRESS
+                putExtra(EXTRA_POSITION_MS, positionMs)
+                putExtra(EXTRA_DURATION_MS, durationMs)
+                putExtra(EXTRA_IS_PLAYING, isPlaying)
+            }
+            runCatching { context.startService(intent) }
         }
 
         fun stopService(context: Context) {
@@ -151,6 +168,14 @@ class AuraPlaybackService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_PROGRESS -> {
+                currentPositionMs = intent.getLongExtra(EXTRA_POSITION_MS, currentPositionMs).coerceAtLeast(0L)
+                val dur = intent.getLongExtra(EXTRA_DURATION_MS, currentDurationMs).coerceAtLeast(0L)
+                if (dur > 0L) currentDurationMs = dur
+                currentlyPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, currentlyPlaying)
+                updateMediaSessionState(getOrCreateArtworkBitmap())
+                return START_NOT_STICKY
+            }
             ACTION_UPDATE, null -> {
                 currentTitle = intent?.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: currentTitle
                 currentArtist = intent?.getStringExtra(EXTRA_ARTIST)?.takeIf { it.isNotBlank() } ?: currentArtist
@@ -194,7 +219,7 @@ class AuraPlaybackService : Service() {
                     PlaybackState.ACTION_SEEK_TO or
                     PlaybackState.ACTION_STOP
             )
-            .setState(stateCode, currentPositionMs, playbackSpeed)
+            .setState(stateCode, currentPositionMs, playbackSpeed, SystemClock.elapsedRealtime())
             .build()
 
         mediaSession?.setPlaybackState(state)

@@ -79,7 +79,7 @@ object PermissionManager {
                 kind = PermissionKind.NOTIFICATIONS,
                 manifestPermission = notifPerm,
                 titleResId = com.example.R.string.perm_notif_title,
-                description = "Affiche le lecteur sur l'écran de verrouillage.",
+                description = "Affiche le lecteur et les suggestions musicales d'Emma.",
                 isGranted = isPermissionGranted(context, notifPerm),
                 requiresRuntimeRequest = notifPerm != null
             ),

@@ -23,7 +23,8 @@ class UserPreferencesRepository(private val dao: UserPreferenceDao) {
             crossfadeEnabled = entity.crossfadeEnabled,
             normalizeEnabled = entity.normalizeEnabled,
             spatial3dEnabled = entity.spatial3dEnabled,
-            hapticFeedbackEnabled = entity.hapticFeedbackEnabled
+            hapticFeedbackEnabled = entity.hapticFeedbackEnabled,
+            proactiveNotificationsEnabled = entity.proactiveNotificationsEnabled
         )
     }
 
@@ -87,5 +88,15 @@ class UserPreferencesRepository(private val dao: UserPreferenceDao) {
     suspend fun saveOnboardingDismissed(dismissed: Boolean) {
         ensureInitialized()
         dao.updateOnboardingDismissed(dismissed)
+    }
+
+    suspend fun saveProactiveNotificationsEnabled(enabled: Boolean) {
+        ensureInitialized()
+        dao.updateProactiveNotificationsEnabled(enabled)
+    }
+
+    suspend fun recordProactiveNotificationSent(sentAtMs: Long, slot: String, message: String) {
+        ensureInitialized()
+        dao.recordProactiveNotificationSent(sentAtMs, slot, message)
     }
 }

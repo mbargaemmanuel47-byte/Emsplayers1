@@ -6,23 +6,27 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -39,6 +43,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.ai.configureAppCheck
+import com.example.notifications.ProactiveNotificationHelper
 import com.example.ui.components.AuraBottomNavBar
 import com.example.ui.components.AuraMiniPlayer
 import com.example.ui.components.AuraNavigationRail
@@ -62,6 +67,8 @@ import com.example.viewmodel.AuraViewModel
 
 class MainActivity : ComponentActivity() {
 
+    private var pendingDeepLinkState by mutableStateOf<Triple<String?, String?, Long?>?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -73,6 +80,7 @@ class MainActivity : ComponentActivity() {
         )
 
         val incomingAudioUri = extractAudioUri(intent)
+        captureNotificationDeepLink(intent)
 
         setContent {
             AuraAITheme {
@@ -84,7 +92,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                AuraMainApp(viewModel = viewModel)
+                AuraMainApp(
+                    viewModel = viewModel,
+                    pendingDeepLink = pendingDeepLinkState,
+                    onConsumeDeepLink = { pendingDeepLinkState = null }
+                )
             }
         }
     }
@@ -93,6 +105,17 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         configureAppCheck(this, intent)
+        captureNotificationDeepLink(intent)
+    }
+
+    private fun captureNotificationDeepLink(intent: Intent?) {
+        val route = intent?.getStringExtra(ProactiveNotificationHelper.EXTRA_OPEN_ROUTE)
+        val message = intent?.getStringExtra(ProactiveNotificationHelper.EXTRA_PROACTIVE_MESSAGE)
+        val suggestedTrackId = intent?.getLongExtra(ProactiveNotificationHelper.EXTRA_SUGGESTED_TRACK_ID, -1L)
+            ?.takeIf { it > 0L }
+        if (!route.isNullOrBlank() || !message.isNullOrBlank()) {
+            pendingDeepLinkState = Triple(route ?: AuraRoutes.STUDIO, message, suggestedTrackId)
+        }
     }
 
     private fun extractAudioUri(intent: Intent?): android.net.Uri? {
@@ -101,7 +124,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AuraMainApp(viewModel: AuraViewModel) {
+fun AuraMainApp(
+    viewModel: AuraViewModel,
+    pendingDeepLink: Triple<String?, String?, Long?>? = null,
+    onConsumeDeepLink: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: AuraRoutes.HOME
@@ -110,6 +137,7 @@ fun AuraMainApp(viewModel: AuraViewModel) {
     val currentTrack by viewModel.currentTrack.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val positionSec by viewModel.currentPositionSec.collectAsStateWithLifecycle()
+    val durationSec by viewModel.currentDurationSec.collectAsStateWithLifecycle()
     val volume by viewModel.volume.collectAsStateWithLifecycle()
     val isMuted by viewModel.isMuted.collectAsStateWithLifecycle()
     val isShuffle by viewModel.isShuffle.collectAsStateWithLifecycle()
@@ -129,17 +157,24 @@ fun AuraMainApp(viewModel: AuraViewModel) {
     val billingState by viewModel.billingState.collectAsStateWithLifecycle()
     val isProUnlocked by viewModel.isProUnlocked.collectAsStateWithLifecycle()
     val showPaywallDialog by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
+    val behaviorProfile by viewModel.behaviorProfile.collectAsStateWithLifecycle()
+    val savedPlaylists by viewModel.savedPlaylists.collectAsStateWithLifecycle()
 
     val allPermissionsGranted = permissionStatuses.all { it.isGranted }
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(allPermissionsGranted) {
+        if (allPermissionsGranted) {
+            viewModel.triggerAutoScanIfAllGranted(forceIfEmpty = true)
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         var skippedFirstResume = false
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 if (skippedFirstResume) {
-                    viewModel.refreshBilling()
-                    viewModel.refreshPermissions()
+                    viewModel.onAppResumed()
                 } else {
                     skippedFirstResume = true
                 }
@@ -164,14 +199,20 @@ fun AuraMainApp(viewModel: AuraViewModel) {
         }
     }
 
+    LaunchedEffect(pendingDeepLink) {
+        if (pendingDeepLink != null) {
+            val (route, message, suggestedTrackId) = pendingDeepLink
+            viewModel.handleProactiveNotificationLaunch(message, suggestedTrackId)
+            navigateTo(route ?: AuraRoutes.STUDIO)
+            onConsumeDeepLink()
+        }
+    }
+
     val accentColor = remember(currentTrack) {
         currentTrack?.let { Color(it.primaryColorHex) } ?: GoldBright
     }
 
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val showMiniPlayer = currentTrack != null && currentRoute != AuraRoutes.PLAYER
-    val topOverlayPadding = statusBarTop + 58.dp
 
     Box(
         modifier = Modifier
@@ -182,7 +223,7 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                 )
             )
     ) {
-        // Animated floating ambient shapes across the whole app
+        // Animated floating ambient shapes across the backdrop
         FloatingAmbientBackground(
             accentColor = accentColor,
             isPlaying = isPlaying
@@ -190,12 +231,6 @@ fun AuraMainApp(viewModel: AuraViewModel) {
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isCompact = maxWidth < 600.dp
-            val bottomOverlayPadding = when {
-                isCompact && showMiniPlayer -> navBarBottom + 134.dp
-                isCompact -> navBarBottom + 78.dp
-                showMiniPlayer -> navBarBottom + 74.dp
-                else -> navBarBottom + 16.dp
-            }
 
             Row(modifier = Modifier.fillMaxSize()) {
                 if (!isCompact) {
@@ -207,149 +242,12 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                     )
                 }
 
-                // Full-bleed layered content box so scrollable items glide beneath the frosted top header & floating bars
-                Box(
+                // Clean docked vertical layout so header, mini-player, and bottom nav never cover list/player text
+                Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                 ) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = AuraRoutes.HOME,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        composable(AuraRoutes.HOME) {
-                            HomeScreen(
-                                tracks = tracks,
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                isScanning = isScanning,
-                                hapticEnabled = audioSettings.hapticFeedbackEnabled,
-                                selectedFilter = homeFilter,
-                                topOverlayPadding = topOverlayPadding,
-                                bottomOverlayPadding = bottomOverlayPadding,
-                                onFilterSelected = viewModel::setHomeMoodFilter,
-                                onPlayTrack = { track -> viewModel.playTrack(track) },
-                                onTogglePlayPause = viewModel::togglePlayPause,
-                                onToggleLike = viewModel::toggleLike,
-                                onScanDeviceAudio = viewModel::scanDeviceAudioFiles,
-                                onImportSafUri = { uri ->
-                                    viewModel.importAudioUriSaf(uri)
-                                    navigateTo(AuraRoutes.PLAYER)
-                                },
-                                onRefreshPermissions = viewModel::refreshPermissions,
-                                onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) },
-                                onOpenStudio = { navigateTo(AuraRoutes.STUDIO) },
-                                onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
-                            )
-                        }
-
-                        composable(AuraRoutes.PLAYER) {
-                            PlayerScreen(
-                                track = currentTrack,
-                                isPlaying = isPlaying,
-                                positionSec = positionSec,
-                                volume = volume,
-                                isMuted = isMuted,
-                                isShuffle = isShuffle,
-                                isRepeat = isRepeat,
-                                isProUnlocked = isProUnlocked,
-                                sleepTimerMinutes = sleepTimerMinutes,
-                                spectrumBars = spectrumBars,
-                                topOverlayPadding = topOverlayPadding,
-                                bottomOverlayPadding = bottomOverlayPadding,
-                                onTogglePlay = viewModel::togglePlayPause,
-                                onNext = viewModel::nextTrack,
-                                onPrevious = viewModel::previousTrack,
-                                onSeekFraction = viewModel::seekToFraction,
-                                onVolumeChange = viewModel::setVolume,
-                                onToggleMute = viewModel::toggleMute,
-                                onToggleShuffle = viewModel::toggleShuffle,
-                                onToggleRepeat = viewModel::toggleRepeat,
-                                onToggleLike = { currentTrack?.let(viewModel::toggleLike) },
-                                onCycleSleepTimer = viewModel::cycleSleepTimer,
-                                onIsolateVocals = viewModel::isolateVocals,
-                                onHarmonicTransition = viewModel::harmonicDjTransition,
-                                onTriggerInstantAiMix = { viewModel.triggerInstantAiMix() },
-                                onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
-                            )
-                        }
-
-                        composable(AuraRoutes.STUDIO) {
-                            StudioScreen(
-                                tracks = tracks,
-                                aiPlaylistState = aiPlaylistState,
-                                chatMessages = chatMessages,
-                                isCopilotTyping = isCopilotTyping,
-                                isProUnlocked = isProUnlocked,
-                                topOverlayPadding = topOverlayPadding,
-                                bottomOverlayPadding = bottomOverlayPadding,
-                                onOpenPaywall = viewModel::openPaywall,
-                                onGeneratePlaylist = viewModel::generateAiPlaylist,
-                                onPlayGeneratedMix = {
-                                    viewModel.playGeneratedMix()
-                                    navigateTo(AuraRoutes.PLAYER)
-                                },
-                                onPlayTrackById = { id ->
-                                    viewModel.playTrackById(id)
-                                    navigateTo(AuraRoutes.PLAYER)
-                                },
-                                onSendChatMessage = viewModel::sendCopilotMessage,
-                                onClearChat = viewModel::clearCopilotChat
-                            )
-                        }
-
-                        composable(AuraRoutes.LIBRARY) {
-                            LibraryScreen(
-                                tracks = tracks,
-                                currentTrack = currentTrack,
-                                isScanning = isScanning,
-                                globalSearch = globalSearch,
-                                topOverlayPadding = topOverlayPadding,
-                                bottomOverlayPadding = bottomOverlayPadding,
-                                onPlayTrack = { track -> viewModel.playTrack(track) },
-                                onToggleLike = viewModel::toggleLike,
-                                onDeleteTrack = viewModel::deleteTrack,
-                                onScanDeviceAudio = viewModel::scanDeviceAudioFiles,
-                                onImportSafUri = { uri ->
-                                    viewModel.importAudioUriSaf(uri)
-                                    navigateTo(AuraRoutes.PLAYER)
-                                },
-                                onRefreshPermissions = viewModel::refreshPermissions
-                            )
-                        }
-
-                        composable(AuraRoutes.EQUALIZER) {
-                            EqualizerScreen(
-                                settings = audioSettings,
-                                dspStatus = dspStatus,
-                                topOverlayPadding = topOverlayPadding,
-                                bottomOverlayPadding = bottomOverlayPadding,
-                                onBandChange = viewModel::updateEqBand,
-                                onSelectPreset = viewModel::applyEqPreset,
-                                onToggleCrossfade = viewModel::toggleCrossfade,
-                                onToggleNormalize = viewModel::toggleNormalize,
-                                onToggleSpatial3d = viewModel::toggleSpatial3d,
-                                onToggleHapticFeedback = viewModel::toggleHapticFeedback
-                            )
-                        }
-
-                        composable(AuraRoutes.PERMISSIONS) {
-                            PermissionsScreen(
-                                permissionStatuses = permissionStatuses,
-                                topOverlayPadding = topOverlayPadding,
-                                bottomOverlayPadding = bottomOverlayPadding,
-                                onRefreshPermissions = viewModel::refreshPermissions,
-                                onImportSafUri = { uri ->
-                                    viewModel.importAudioUriSaf(uri)
-                                    navigateTo(AuraRoutes.PLAYER)
-                                },
-                                onScanDeviceAudio = viewModel::scanDeviceAudioFiles
-                            )
-                        }
-                    }
-
-                    // Frosted translucent top header floating OVER scrollable content
                     AuraTopHeader(
                         searchQuery = globalSearch,
                         onSearchChange = { q ->
@@ -368,32 +266,171 @@ fun AuraMainApp(viewModel: AuraViewModel) {
                         allPermissionsGranted = allPermissionsGranted,
                         isProUnlocked = isProUnlocked,
                         isPlaying = isPlaying,
-                        showSearchBar = !isCompact,
-                        modifier = Modifier.align(Alignment.TopCenter)
+                        showSearchBar = !isCompact
                     )
 
-                    // Floating Mini-Player + Floating Pill Nav Bar
-                    Column(
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
                     ) {
-                        if (showMiniPlayer) {
-                            AuraMiniPlayer(
-                                track = currentTrack,
-                                isPlaying = isPlaying,
-                                positionSec = positionSec,
-                                onTogglePlay = viewModel::togglePlayPause,
-                                onNext = viewModel::nextTrack,
-                                onPrevious = viewModel::previousTrack,
-                                onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) }
-                            )
+                        NavHost(
+                            navController = navController,
+                            startDestination = AuraRoutes.HOME,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            composable(AuraRoutes.HOME) {
+                                HomeScreen(
+                                    tracks = tracks,
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    isScanning = isScanning,
+                                    hapticEnabled = audioSettings.hapticFeedbackEnabled,
+                                    selectedFilter = homeFilter,
+                                    onFilterSelected = viewModel::setHomeMoodFilter,
+                                    onPlayTrack = { track -> viewModel.playTrack(track) },
+                                    onTogglePlayPause = viewModel::togglePlayPause,
+                                    onToggleLike = viewModel::toggleLike,
+                                    onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) },
+                                    onOpenStudio = { navigateTo(AuraRoutes.STUDIO) },
+                                    onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
+                                )
+                            }
+
+                            composable(AuraRoutes.PLAYER) {
+                                PlayerScreen(
+                                    track = currentTrack,
+                                    isPlaying = isPlaying,
+                                    positionSec = positionSec,
+                                    durationSec = durationSec,
+                                    volume = volume,
+                                    isMuted = isMuted,
+                                    isShuffle = isShuffle,
+                                    isRepeat = isRepeat,
+                                    isProUnlocked = isProUnlocked,
+                                    sleepTimerMinutes = sleepTimerMinutes,
+                                    spectrumBars = spectrumBars,
+                                    onTogglePlay = viewModel::togglePlayPause,
+                                    onNext = viewModel::nextTrack,
+                                    onPrevious = viewModel::previousTrack,
+                                    onSeekFraction = viewModel::seekToFraction,
+                                    onVolumeChange = viewModel::setVolume,
+                                    onToggleMute = viewModel::toggleMute,
+                                    onToggleShuffle = viewModel::toggleShuffle,
+                                    onToggleRepeat = viewModel::toggleRepeat,
+                                    onToggleLike = { currentTrack?.let(viewModel::toggleLike) },
+                                    onCycleSleepTimer = viewModel::cycleSleepTimer,
+                                    onIsolateVocals = viewModel::isolateVocals,
+                                    onHarmonicTransition = viewModel::harmonicDjTransition,
+                                    onTriggerInstantAiMix = { viewModel.triggerInstantAiMix() },
+                                    onOpenLibrary = { navigateTo(AuraRoutes.LIBRARY) }
+                                )
+                            }
+
+                            composable(AuraRoutes.STUDIO) {
+                                StudioScreen(
+                                    tracks = tracks,
+                                    behaviorProfile = behaviorProfile,
+                                    proactiveNotificationsEnabled = audioSettings.proactiveNotificationsEnabled,
+                                    aiPlaylistState = aiPlaylistState,
+                                    chatMessages = chatMessages,
+                                    isCopilotTyping = isCopilotTyping,
+                                    isProUnlocked = isProUnlocked,
+                                    topOverlayPadding = 0.dp,
+                                    bottomOverlayPadding = 0.dp,
+                                    onOpenPaywall = viewModel::openPaywall,
+                                    onGeneratePlaylist = viewModel::generateAiPlaylist,
+                                    onPlayGeneratedMix = {
+                                        viewModel.playGeneratedMix()
+                                        navigateTo(AuraRoutes.PLAYER)
+                                    },
+                                    onPlayTrackById = { id ->
+                                        viewModel.playTrackById(id)
+                                        navigateTo(AuraRoutes.PLAYER)
+                                    },
+                                    onSendChatMessage = viewModel::sendCopilotMessage,
+                                    onClearChat = viewModel::clearCopilotChat,
+                                    onToggleProactiveNotifications = viewModel::toggleProactiveNotifications,
+                                    onTriggerProactiveNotificationTest = viewModel::triggerProactiveNotificationNow
+                                )
+                            }
+
+                            composable(AuraRoutes.LIBRARY) {
+                                LibraryScreen(
+                                    tracks = tracks,
+                                    savedPlaylists = savedPlaylists,
+                                    currentTrack = currentTrack,
+                                    isScanning = isScanning,
+                                    globalSearch = globalSearch,
+                                    topOverlayPadding = 0.dp,
+                                    bottomOverlayPadding = 0.dp,
+                                    onPlayTrack = { track -> viewModel.playTrack(track) },
+                                    onToggleLike = viewModel::toggleLike,
+                                    onDeleteTrack = viewModel::deleteTrack,
+                                    onScanDeviceAudio = viewModel::scanDeviceAudioFiles,
+                                    onImportSafUri = { uri ->
+                                        viewModel.importAudioUriSaf(uri)
+                                        navigateTo(AuraRoutes.PLAYER)
+                                    },
+                                    onCreatePlaylist = viewModel::createCustomPlaylist,
+                                    onPlaySavedPlaylist = { playlist ->
+                                        viewModel.playSavedPlaylist(playlist)
+                                        navigateTo(AuraRoutes.PLAYER)
+                                    },
+                                    onDeleteSavedPlaylist = viewModel::deleteSavedPlaylist,
+                                    onRefreshPermissions = viewModel::refreshPermissions
+                                )
+                            }
+
+                            composable(AuraRoutes.EQUALIZER) {
+                                EqualizerScreen(
+                                    settings = audioSettings,
+                                    dspStatus = dspStatus,
+                                    topOverlayPadding = 0.dp,
+                                    bottomOverlayPadding = 0.dp,
+                                    onBandChange = viewModel::updateEqBand,
+                                    onSelectPreset = viewModel::applyEqPreset,
+                                    onToggleCrossfade = viewModel::toggleCrossfade,
+                                    onToggleNormalize = viewModel::toggleNormalize,
+                                    onToggleSpatial3d = viewModel::toggleSpatial3d,
+                                    onToggleHapticFeedback = viewModel::toggleHapticFeedback,
+                                    onToggleProactiveNotifications = viewModel::toggleProactiveNotifications
+                                )
+                            }
+
+                            composable(AuraRoutes.PERMISSIONS) {
+                                PermissionsScreen(
+                                    permissionStatuses = permissionStatuses,
+                                    onRefreshPermissions = viewModel::refreshPermissions,
+                                    onScanDeviceAudio = viewModel::scanDeviceAudioFiles
+                                )
+                            }
                         }
-                        if (isCompact) {
-                            AuraBottomNavBar(
-                                currentRoute = currentRoute,
-                                onNavigate = navigateTo
-                            )
-                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = showMiniPlayer,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        AuraMiniPlayer(
+                            track = currentTrack,
+                            isPlaying = isPlaying,
+                            positionSec = positionSec,
+                            durationSec = durationSec,
+                            onTogglePlay = viewModel::togglePlayPause,
+                            onNext = viewModel::nextTrack,
+                            onPrevious = viewModel::previousTrack,
+                            onOpenPlayer = { navigateTo(AuraRoutes.PLAYER) },
+                            modifier = if (!isCompact) Modifier.navigationBarsPadding() else Modifier
+                        )
+                    }
+
+                    if (isCompact) {
+                        AuraBottomNavBar(
+                            currentRoute = currentRoute,
+                            onNavigate = navigateTo
+                        )
                     }
                 }
             }

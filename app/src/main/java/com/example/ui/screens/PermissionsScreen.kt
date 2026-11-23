@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,9 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -62,10 +59,9 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun PermissionsScreen(
     permissionStatuses: List<AndroidPermissionStatus>,
-    topOverlayPadding: Dp,
-    bottomOverlayPadding: Dp,
+    topOverlayPadding: Dp = 0.dp,
+    bottomOverlayPadding: Dp = 0.dp,
     onRefreshPermissions: () -> Unit,
-    onImportSafUri: (Uri) -> Unit,
     onScanDeviceAudio: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -85,12 +81,6 @@ fun PermissionsScreen(
         if (PermissionManager.hasAudioLibraryPermission(context)) {
             onScanDeviceAudio()
         }
-    }
-
-    val safLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) onImportSafUri(uri)
     }
 
     val pendingPermissions = PermissionManager.getPendingRuntimePermissions(context)
@@ -241,52 +231,6 @@ fun PermissionsScreen(
                             softWrap = false
                         )
                     }
-                }
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { safLauncher.launch(arrayOf("audio/*")) },
-                    colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                ) {
-                    Icon(Icons.Filled.AudioFile, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = stringResource(R.string.perm_saf_cta),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                OutlinedButton(
-                    onClick = onScanDeviceAudio,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldLight),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                ) {
-                    Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = stringResource(R.string.perm_scan_cta),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
             }
         }

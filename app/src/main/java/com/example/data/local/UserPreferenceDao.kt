@@ -39,6 +39,16 @@ interface UserPreferenceDao {
     @Query("UPDATE user_preferences SET hasDismissedOnboarding = :dismissed, updatedAtMs = :updatedAt WHERE id = 1")
     suspend fun updateOnboardingDismissed(dismissed: Boolean, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("UPDATE user_preferences SET proactiveNotificationsEnabled = :enabled, updatedAtMs = :updatedAt WHERE id = 1")
+    suspend fun updateProactiveNotificationsEnabled(enabled: Boolean, updatedAt: Long = System.currentTimeMillis())
+
+    @Query(
+        "UPDATE user_preferences SET lastProactiveNotifAtMs = :sentAtMs, " +
+            "lastProactiveNotifSlot = :slot, lastProactiveNotifMessage = :message, " +
+            "updatedAtMs = :sentAtMs WHERE id = 1"
+    )
+    suspend fun recordProactiveNotificationSent(sentAtMs: Long, slot: String, message: String)
+
     @Query("DELETE FROM user_preferences")
     suspend fun clearAll()
 }

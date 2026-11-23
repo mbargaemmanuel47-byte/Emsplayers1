@@ -49,7 +49,8 @@ data class AudioSettingsState(
     val crossfadeEnabled: Boolean = true,
     val normalizeEnabled: Boolean = true,
     val spatial3dEnabled: Boolean = false,
-    val hapticFeedbackEnabled: Boolean = true
+    val hapticFeedbackEnabled: Boolean = true,
+    val proactiveNotificationsEnabled: Boolean = true
 )
 
 data class ChatMessage(
@@ -64,6 +65,86 @@ data class GeneratedMixResult(
     val title: String,
     val rationale: String,
     val trackIds: List<Long>
+)
+
+enum class ListeningTimeSlot(
+    val code: String,
+    val label: String,
+    val hoursLabel: String
+) {
+    MATIN("MATIN", "Matin", "06h–12h"),
+    APRES_MIDI("APRES_MIDI", "Après-midi", "12h–18h"),
+    SOIREE("SOIREE", "Soirée", "18h–23h"),
+    NUIT("NUIT", "Nuit", "23h–06h");
+
+    companion object {
+        fun fromHour(hourOfDay: Int): ListeningTimeSlot {
+            val h = ((hourOfDay % 24) + 24) % 24
+            return when (h) {
+                in 6..11 -> MATIN
+                in 12..17 -> APRES_MIDI
+                in 18..22 -> SOIREE
+                else -> NUIT
+            }
+        }
+
+        fun approachingFromHour(hourOfDay: Int): ListeningTimeSlot {
+            return fromHour((hourOfDay + 1) % 24)
+        }
+
+        fun fromCode(code: String): ListeningTimeSlot {
+            return entries.firstOrNull { it.code == code } ?: SOIREE
+        }
+    }
+}
+
+data class SavedPlaylist(
+    val id: Long,
+    val title: String,
+    val description: String,
+    val trackIds: List<Long>,
+    val createdAtMs: Long,
+    val isAiGenerated: Boolean,
+    val playCount: Int
+)
+
+data class TrackTransitionSummary(
+    val fromTrackId: Long,
+    val fromTitle: String,
+    val toTrackId: Long,
+    val toTitle: String,
+    val count: Int
+)
+
+data class TimeSlotHabit(
+    val slot: ListeningTimeSlot,
+    val playCount: Int,
+    val topTrackId: Long?,
+    val topTrackTitle: String?,
+    val topTrackArtist: String?,
+    val peakHour: Int?
+)
+
+data class ListeningBehaviorProfile(
+    val totalTrackedPlays: Int = 0,
+    val totalLibraryTracks: Int = 0,
+    val topTracks: List<Track> = emptyList(),
+    val likedTracks: List<Track> = emptyList(),
+    val playlists: List<SavedPlaylist> = emptyList(),
+    val topTransitions: List<TrackTransitionSummary> = emptyList(),
+    val slotHabits: List<TimeSlotHabit> = emptyList(),
+    val currentSlot: ListeningTimeSlot = ListeningTimeSlot.SOIREE,
+    val approachingSlot: ListeningTimeSlot = ListeningTimeSlot.SOIREE,
+    val dominantHabitForWindow: TimeSlotHabit? = null,
+    val systemPromptBlock: String = "",
+    val compactBadgeSummary: String = "En attente de vos premières écoutes"
+)
+
+data class ProactiveNotificationDraft(
+    val message: String,
+    val suggestedTrackId: Long? = null,
+    val suggestedPlaylistId: Long? = null,
+    val slot: ListeningTimeSlot
 )
 
 sealed interface AiGenerationUiState<out T> {

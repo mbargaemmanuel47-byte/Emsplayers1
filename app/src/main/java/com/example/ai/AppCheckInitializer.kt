@@ -18,7 +18,7 @@ private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
 /**
  * Configures Firebase App Check before Compose UI or ViewModels are created.
- * Preserves synchronous .commit() for debug token persistence per App Check contract.
+ * Strictly uses synchronous .commit() for debug token persistence per App Check contract.
  */
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
@@ -26,7 +26,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
             FirebaseApp.initializeApp(context)
         }
         if (FirebaseApp.getApps(context).isEmpty()) {
-            Log.w(TAG, "FirebaseApp unavailable (missing google-services.json); continuing in local-first mode.")
+            Log.w(TAG, "FirebaseApp unavailable; continuing in local-first mode.")
             return
         }
 
@@ -38,6 +38,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
                     "$DEBUG_STORE_PREFIX$persistenceKey",
                     Context.MODE_PRIVATE
                 )
+                // CRITICAL: synchronous .commit() before DebugAppCheckProviderFactory reads it.
                 prefs.edit()
                     .putString(DEBUG_SECRET_KEY, debugToken)
                     .commit()

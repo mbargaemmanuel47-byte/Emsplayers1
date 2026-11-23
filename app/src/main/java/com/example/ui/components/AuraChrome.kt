@@ -127,46 +127,18 @@ fun AuraTopHeader(
     showSearchBar: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Translucent frosted glass header allowing scrolled items underneath to diffuse through
-    val blurModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        Modifier.blur(18.dp)
-    } else {
-        Modifier
-    }
-
     Box(
         modifier = modifier
             .fillMaxWidth()
-    ) {
-        // Frosted glass backdrop layer with soft haze diffusion
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Midnight.copy(alpha = 0.72f),
-                            Obsidian.copy(alpha = 0.56f),
-                            Obsidian.copy(alpha = 0.34f)
-                        )
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Midnight.copy(alpha = 0.96f),
+                        Obsidian.copy(alpha = 0.94f)
                     )
                 )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(blurModifier)
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                GoldBright.copy(alpha = 0.08f),
-                                DeepBlue.copy(alpha = 0.22f),
-                                RoyalBlueAccent.copy(alpha = 0.10f)
-                            )
-                        )
-                    )
             )
-        }
+    ) {
 
         Column(modifier = Modifier.statusBarsPadding()) {
             Row(
@@ -332,6 +304,7 @@ fun AuraMiniPlayer(
     track: Track?,
     isPlaying: Boolean,
     positionSec: Float,
+    durationSec: Int,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -340,26 +313,16 @@ fun AuraMiniPlayer(
 ) {
     if (track == null) return
 
-    val transition = rememberInfiniteTransition(label = "mini_float")
-    val floatOffsetY by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (isPlaying) -2.5f else -1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "mini_float_y"
-    )
-    val progress = if (track.durationSec > 0) (positionSec / track.durationSec).coerceIn(0f, 1f) else 0f
+    val effectiveDurationSec = durationSec.coerceAtLeast(track.durationSec).coerceAtLeast(1)
+    val progress = (positionSec / effectiveDurationSec).coerceIn(0f, 1f)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .offset(y = floatOffsetY.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(CardDarkSurface.copy(alpha = 0.88f))
-            .border(1.dp, GoldBright.copy(alpha = 0.30f), RoundedCornerShape(18.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardDarkSurface.copy(alpha = 0.97f))
+            .border(1.dp, GoldBright.copy(alpha = 0.32f), RoundedCornerShape(16.dp))
     ) {
         // Slim golden progress line
         Box(
@@ -380,7 +343,7 @@ fun AuraMiniPlayer(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onOpenPlayer)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 9.dp, vertical = 5.dp)
                 .testTag("mini_player_bar"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -389,7 +352,7 @@ fun AuraMiniPlayer(
                 track = track,
                 cornerRadius = 8.dp,
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(34.dp)
                     .border(1.dp, BorderGold, RoundedCornerShape(8.dp))
             )
 
@@ -403,7 +366,7 @@ fun AuraMiniPlayer(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${track.artist} • ${formatDuration(positionSec.toInt())} / ${formatDuration(track.durationSec)}",
+                    text = "${track.artist} • ${formatDuration(positionSec.toInt())} / ${formatDuration(effectiveDurationSec)}",
                     style = MaterialTheme.typography.bodySmall,
                     fontSize = 10.sp,
                     color = TextMuted,
@@ -415,7 +378,7 @@ fun AuraMiniPlayer(
             IconButton(
                 onClick = onPrevious,
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .testTag("mini_prev_button")
             ) {
                 Icon(
@@ -428,7 +391,7 @@ fun AuraMiniPlayer(
 
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(listOf(GoldBright, GoldMetallic)))
                     .clickable(onClick = onTogglePlay)
@@ -439,14 +402,14 @@ fun AuraMiniPlayer(
                     imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = stringResource(R.string.cd_play_pause),
                     tint = Obsidian,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
 
             IconButton(
                 onClick = onNext,
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .testTag("mini_next_button")
             ) {
                 Icon(
@@ -466,20 +429,20 @@ fun AuraBottomNavBar(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Floating translucent pill navigation bar respecting system navigation bar insets
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .background(Obsidian.copy(alpha = 0.96f))
             .navigationBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(Midnight.copy(alpha = 0.86f))
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
-                .padding(horizontal = 4.dp, vertical = 5.dp),
+                .clip(RoundedCornerShape(20.dp))
+                .background(Midnight.copy(alpha = 0.96f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {

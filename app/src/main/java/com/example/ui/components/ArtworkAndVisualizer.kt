@@ -7,14 +7,22 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -27,8 +35,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.model.Track
 import com.example.ui.theme.GoldBright
 import com.example.ui.theme.GoldLight
@@ -69,77 +81,27 @@ fun EmPlayerLogo(
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val transition = rememberInfiniteTransition(label = "em_logo_wave")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2f * PI).toFloat(),
+    val transition = rememberInfiniteTransition(label = "em_logo_pulse")
+    val pulse by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
         ),
-        label = "wave_phase"
+        label = "logo_scale"
     )
 
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val radius = minOf(w, h) / 2f
-        val center = Offset(w / 2f, h / 2f)
-
-        // Circular medallion backdrop
-        drawCircle(
-            brush = Brush.linearGradient(
-                colors = listOf(Color(0xFF10204A), Obsidian)
-            ),
-            radius = radius,
-            center = center
-        )
-        drawCircle(
-            brush = Brush.linearGradient(
-                colors = listOf(GoldBright, RoyalBlueAccent.copy(alpha = 0.8f), GoldMetallic)
-            ),
-            radius = radius - (w * 0.03f),
-            center = center,
-            style = Stroke(width = (w * 0.06f).coerceAtLeast(1.5f))
-        )
-
-        // Subtle inner glow arc
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(GoldBright.copy(alpha = 0.26f), Color.Transparent),
-                center = Offset(w * 0.35f, h * 0.30f),
-                radius = w * 0.60f
-            ),
-            radius = radius * 0.92f,
-            center = center
-        )
-
-        // Three precision soundwave bars ("Em" emblem)
-        val barWidth = w * 0.11f
-        val gap = w * 0.08f
-        val startX = (w - (barWidth * 3 + gap * 2)) / 2f
-        val baseFractions = floatArrayOf(0.36f, 0.56f, 0.42f)
-
-        for (i in 0..2) {
-            val animFactor = if (isPlaying) {
-                0.78f + 0.22f * sin(phase + i * 1.3f)
-            } else {
-                1f
-            }
-            val barH = (h * baseFractions[i] * animFactor).coerceAtLeast(h * 0.20f)
-            val x = startX + i * (barWidth + gap)
-            val y = (h - barH) / 2f
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = if (i == 1) listOf(GoldLight, GoldBright, GoldMetallic)
-                    else listOf(GoldBright, RoyalBlueAccent)
-                ),
-                topLeft = Offset(x, y),
-                size = Size(barWidth, barH),
-                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
-            )
+    Image(
+        painter = painterResource(id = R.drawable.em_player_custom_icon),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = modifier.graphicsLayer {
+            val s = if (isPlaying) pulse else 1f
+            scaleX = s
+            scaleY = s
         }
-    }
+    )
 }
 
 @Composable
@@ -351,4 +313,53 @@ fun AudioVisualizerCanvas(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CompactGoldSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    onValueChangeFinished: (() -> Unit)? = null
+) {
+    val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
+    val clamped = value.coerceIn(valueRange.start, valueRange.endInclusive)
+    val fraction = ((clamped - valueRange.start) / span).coerceIn(0f, 1f)
+
+    Slider(
+        value = clamped,
+        onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
+        valueRange = valueRange,
+        modifier = modifier.height(26.dp),
+        thumb = {
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(GoldBright)
+                    .border(2.dp, Obsidian, CircleShape)
+            )
+        },
+        track = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Brush.horizontalGradient(listOf(GoldBright, GoldMetallic)))
+                )
+            }
+        }
+    )
 }

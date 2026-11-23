@@ -46,8 +46,13 @@ jobs:
           fi
 
       - name: Prepare .env & debug keystore
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          touch .env
+          : > .env
+          if [ -n "$GROQ_API_KEY" ]; then
+            printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> .env
+          fi
           if [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
           elif [ ! -f debug.keystore ]; then

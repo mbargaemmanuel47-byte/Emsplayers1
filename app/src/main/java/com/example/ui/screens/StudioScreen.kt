@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,7 +28,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,12 +40,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -60,7 +67,9 @@ import androidx.compose.ui.unit.sp
 import com.example.model.AiGenerationUiState
 import com.example.model.ChatMessage
 import com.example.model.GeneratedMixResult
+import com.example.model.ListeningBehaviorProfile
 import com.example.model.Track
+import com.example.ui.components.CompactGoldSlider
 import com.example.ui.components.TrackArtworkCanvas
 import com.example.ui.components.formatDuration
 import com.example.ui.theme.BorderGold
@@ -79,6 +88,8 @@ import com.example.ui.theme.TextSecondary
 @Composable
 fun StudioScreen(
     tracks: List<Track>,
+    behaviorProfile: ListeningBehaviorProfile,
+    proactiveNotificationsEnabled: Boolean,
     aiPlaylistState: AiGenerationUiState<GeneratedMixResult>,
     chatMessages: List<ChatMessage>,
     isCopilotTyping: Boolean,
@@ -91,6 +102,8 @@ fun StudioScreen(
     onPlayTrackById: (Long) -> Unit,
     onSendChatMessage: (String) -> Unit,
     onClearChat: () -> Unit,
+    onToggleProactiveNotifications: (Boolean) -> Unit,
+    onTriggerProactiveNotificationTest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var promptText by rememberSaveable {
@@ -99,6 +112,8 @@ fun StudioScreen(
     var targetBpm by rememberSaveable { mutableFloatStateOf(102f) }
     var emotionalIntensity by rememberSaveable { mutableFloatStateOf(75f) }
     var chatInput by rememberSaveable { mutableStateOf("") }
+    var activeTab by rememberSaveable { mutableStateOf("chat") }
+    var showInsights by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isWide = maxWidth >= 820.dp
@@ -111,30 +126,88 @@ fun StudioScreen(
                 top = topOverlayPadding + 10.dp,
                 bottom = bottomOverlayPadding + 14.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "Studio IA Em Player",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White
-                    )
-                    Text(
-                        text = if (tracks.isEmpty()) {
-                            "Scannez ou importez d'abord vos musiques pour créer des playlists."
-                        } else {
-                            "Composez des playlists et posez vos questions à partir de vos ${tracks.size} titres."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "Emma • Compagne IA",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${behaviorProfile.currentSlot.label} • ${behaviorProfile.compactBadgeSummary}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = GoldLight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
             if (!isProUnlocked) {
                 item {
                     ProLockedBannerCard(onUnlockClick = onOpenPaywall)
+                }
+            }
+
+            item {
+                EmmaBehaviorSummaryCard(
+                    profile = behaviorProfile,
+                    proactiveEnabled = proactiveNotificationsEnabled,
+                    expanded = showInsights,
+                    onToggleExpand = { showInsights = !showInsights },
+                    onToggleProactive = onToggleProactiveNotifications,
+                    onTestAlert = onTriggerProactiveNotificationTest
+                )
+            }
+
+            if (!isWide) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White.copy(alpha = 0.05f))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("chat" to "Chat avec Emma", "mix" to "Mix IA").forEach { (tabKey, label) ->
+                            val selected = activeTab == tabKey
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(if (selected) GoldBright else Color.Transparent)
+                                    .clickable { activeTab = tabKey }
+                                    .padding(vertical = 8.dp)
+                                    .testTag("studio_tab_$tabKey"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selected) Obsidian else TextSecondary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -145,8 +218,31 @@ fun StudioScreen(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.Top
                     ) {
+                        CopilotChatCard(
+                            messages = chatMessages,
+                            profile = behaviorProfile,
+                            isTyping = isCopilotTyping,
+                            isProUnlocked = isProUnlocked,
+                            chatInput = chatInput,
+                            onChatInputChange = { chatInput = it },
+                            onSend = {
+                                if (isProUnlocked) {
+                                    onSendChatMessage(chatInput)
+                                    chatInput = ""
+                                } else {
+                                    onOpenPaywall()
+                                }
+                            },
+                            onQuickPrompt = { prompt ->
+                                if (isProUnlocked) onSendChatMessage(prompt) else onOpenPaywall()
+                            },
+                            onPlayRecommendedTrack = onPlayTrackById,
+                            onClear = onClearChat,
+                            onOpenPaywall = onOpenPaywall,
+                            modifier = Modifier.weight(1.05f)
+                        )
                         Column(
-                            modifier = Modifier.weight(1.1f),
+                            modifier = Modifier.weight(0.95f),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             GeneratorPromptCard(
@@ -173,29 +269,32 @@ fun StudioScreen(
                                 onPlayTrackById = onPlayTrackById
                             )
                         }
-                        CopilotChatCard(
-                            messages = chatMessages,
-                            isTyping = isCopilotTyping,
-                            isProUnlocked = isProUnlocked,
-                            chatInput = chatInput,
-                            onChatInputChange = { chatInput = it },
-                            onSend = {
-                                if (isProUnlocked) {
-                                    onSendChatMessage(chatInput)
-                                    chatInput = ""
-                                } else {
-                                    onOpenPaywall()
-                                }
-                            },
-                            onQuickPrompt = { prompt ->
-                                if (isProUnlocked) onSendChatMessage(prompt) else onOpenPaywall()
-                            },
-                            onPlayRecommendedTrack = onPlayTrackById,
-                            onClear = onClearChat,
-                            onOpenPaywall = onOpenPaywall,
-                            modifier = Modifier.weight(0.9f)
-                        )
                     }
+                }
+            } else if (activeTab == "chat") {
+                item {
+                    CopilotChatCard(
+                        messages = chatMessages,
+                        profile = behaviorProfile,
+                        isTyping = isCopilotTyping,
+                        isProUnlocked = isProUnlocked,
+                        chatInput = chatInput,
+                        onChatInputChange = { chatInput = it },
+                        onSend = {
+                            if (isProUnlocked) {
+                                onSendChatMessage(chatInput)
+                                chatInput = ""
+                            } else {
+                                onOpenPaywall()
+                            }
+                        },
+                        onQuickPrompt = { prompt ->
+                            if (isProUnlocked) onSendChatMessage(prompt) else onOpenPaywall()
+                        },
+                        onPlayRecommendedTrack = onPlayTrackById,
+                        onClear = onClearChat,
+                        onOpenPaywall = onOpenPaywall
+                    )
                 }
             } else {
                 item {
@@ -225,28 +324,145 @@ fun StudioScreen(
                         onPlayTrackById = onPlayTrackById
                     )
                 }
-                item {
-                    CopilotChatCard(
-                        messages = chatMessages,
-                        isTyping = isCopilotTyping,
-                        isProUnlocked = isProUnlocked,
-                        chatInput = chatInput,
-                        onChatInputChange = { chatInput = it },
-                        onSend = {
-                            if (isProUnlocked) {
-                                onSendChatMessage(chatInput)
-                                chatInput = ""
-                            } else {
-                                onOpenPaywall()
-                            }
-                        },
-                        onQuickPrompt = { prompt ->
-                            if (isProUnlocked) onSendChatMessage(prompt) else onOpenPaywall()
-                        },
-                        onPlayRecommendedTrack = onPlayTrackById,
-                        onClear = onClearChat,
-                        onOpenPaywall = onOpenPaywall
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmmaBehaviorSummaryCard(
+    profile: ListeningBehaviorProfile,
+    proactiveEnabled: Boolean,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onToggleProactive: (Boolean) -> Unit,
+    onTestAlert: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardDarkSurface.copy(alpha = 0.88f))
+            .border(1.dp, BorderGold.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggleExpand)
+                .testTag("emma_insights_toggle"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Insights,
+                contentDescription = null,
+                tint = GoldBright,
+                modifier = Modifier.size(18.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Mémoire musicale d'Emma",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = profile.dominantHabitForWindow?.topTrackTitle?.let {
+                        "Habitude ${profile.dominantHabitForWindow.slot.label.lowercase()} : $it"
+                    } ?: "Analyse continue de vos écoutes, favoris et horaires",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Réduire" else "Développer",
+                tint = GoldLight,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (profile.topTracks.isNotEmpty()) {
+                    Text(
+                        text = "Top écoutes : ${profile.topTracks.take(3).joinToString(", ") { "${it.title} (${it.playCount})" }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = TextSecondary
                     )
+                }
+                if (profile.topTransitions.isNotEmpty()) {
+                    val topSeq = profile.topTransitions.first()
+                    Text(
+                        text = "Enchaînement fréquent : ${topSeq.fromTitle} → ${topSeq.toTitle} (${topSeq.count}x)",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = EmeraldAccent
+                    )
+                }
+                if (profile.playlists.isNotEmpty()) {
+                    Text(
+                        text = "Playlists mémorisées : ${profile.playlists.take(3).joinToString(", ") { it.title }}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 11.sp,
+                        color = GoldLight
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "Alertes proactives d'Emma",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Suggestions personnalisées selon vos créneaux",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 10.sp,
+                            color = TextMuted
+                        )
+                    }
+                    Switch(
+                        checked = proactiveEnabled,
+                        onCheckedChange = onToggleProactive,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Obsidian,
+                            checkedTrackColor = GoldBright,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = Color.White.copy(alpha = 0.2f)
+                        ),
+                        modifier = Modifier.testTag("studio_proactive_switch")
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onTestAlert,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldLight),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .testTag("emma_test_notification_btn")
+                ) {
+                    Icon(Icons.Filled.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Recevoir une suggestion maintenant", fontSize = 12.sp)
                 }
             }
         }
@@ -398,11 +614,11 @@ private fun GeneratorPromptCard(
                         color = GoldBright
                     )
                 }
-                Slider(
+                CompactGoldSlider(
                     value = targetBpm,
                     onValueChange = onBpmChange,
                     valueRange = 75f..140f,
-                    colors = SliderDefaults.colors(thumbColor = GoldBright, activeTrackColor = GoldBright)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -436,11 +652,11 @@ private fun GeneratorPromptCard(
                         color = GoldBright
                     )
                 }
-                Slider(
+                CompactGoldSlider(
                     value = emotionalIntensity,
                     onValueChange = onIntensityChange,
                     valueRange = 20f..100f,
-                    colors = SliderDefaults.colors(thumbColor = GoldBright, activeTrackColor = GoldBright)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -452,7 +668,7 @@ private fun GeneratorPromptCard(
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(42.dp)
+                .height(44.dp)
                 .testTag("studio_generate_btn")
         ) {
             if (isLoading) {
@@ -599,6 +815,7 @@ private fun GeneratedResultCard(
 @Composable
 private fun CopilotChatCard(
     messages: List<ChatMessage>,
+    profile: ListeningBehaviorProfile,
     isTyping: Boolean,
     isProUnlocked: Boolean,
     chatInput: String,
@@ -610,6 +827,19 @@ private fun CopilotChatCard(
     onOpenPaywall: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val chatScrollState = rememberScrollState()
+    val lastText = messages.lastOrNull()?.text.orEmpty()
+    LaunchedEffect(messages.size, lastText.length) {
+        chatScrollState.animateScrollTo(chatScrollState.maxValue)
+    }
+
+    val quickSuggestions = buildList {
+        add("Quel titre pour ce ${profile.currentSlot.label.lowercase()} ?")
+        add("Analyse mes habitudes d'écoute")
+        if (profile.topTransitions.isNotEmpty()) add("Suite après mon dernier son")
+        add("Mes favoris")
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -636,7 +866,7 @@ private fun CopilotChatCard(
                         .background(EmeraldAccent)
                 )
                 Text(
-                    text = "Assistant Em Player",
+                    text = "Emma • IA Musicale",
                     style = MaterialTheme.typography.titleSmall,
                     color = Color.White,
                     maxLines = 1,
@@ -651,18 +881,18 @@ private fun CopilotChatCard(
                 softWrap = false,
                 modifier = Modifier
                     .clickable(onClick = if (isProUnlocked) onClear else onOpenPaywall)
-                    .padding(4.dp)
+                    .padding(6.dp)
             )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 120.dp, max = 260.dp)
-                .verticalScroll(rememberScrollState()),
+                .heightIn(min = 180.dp, max = 330.dp)
+                .verticalScroll(chatScrollState),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            messages.takeLast(8).forEach { msg ->
+            messages.takeLast(14).forEach { msg ->
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = if (msg.isUser) Alignment.End else Alignment.Start
@@ -670,15 +900,15 @@ private fun CopilotChatCard(
                     Column(
                         modifier = Modifier
                             .widthIn(max = 290.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (msg.isUser) GoldBright else Color.White.copy(alpha = 0.06f))
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(if (msg.isUser) GoldBright else Color.White.copy(alpha = 0.07f))
                             .padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Text(
-                            text = msg.text.ifBlank { if (msg.isStreaming) "..." else "" },
+                            text = msg.text.ifBlank { if (msg.isStreaming) "Emma réfléchit..." else "" },
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (msg.isUser) Obsidian else TextSecondary,
+                            color = if (msg.isUser) Obsidian else Color.White.copy(alpha = 0.92f),
                             fontWeight = if (msg.isUser) FontWeight.SemiBold else FontWeight.Normal
                         )
                         if (msg.recommendedTrackId != null && !msg.isStreaming) {
@@ -687,7 +917,7 @@ private fun CopilotChatCard(
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(GoldBright)
                                     .clickable { onPlayRecommendedTrack(msg.recommendedTrackId) }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
                             ) {
                                 Text("▶ Écouter", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = Obsidian)
                             }
@@ -703,14 +933,14 @@ private fun CopilotChatCard(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            listOf("Quel titre écouter ?", "File calme", "Mes favoris").forEach { suggestion ->
+            quickSuggestions.forEach { suggestion ->
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.05f))
                         .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                         .clickable { onQuickPrompt(suggestion) }
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(suggestion, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, color = GoldLight)
                 }
@@ -720,14 +950,14 @@ private fun CopilotChatCard(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
                 value = chatInput,
                 onValueChange = onChatInputChange,
                 singleLine = true,
-                placeholder = { Text("Écrivez un message...", fontSize = 12.sp, color = TextMuted) },
-                shape = RoundedCornerShape(12.dp),
+                placeholder = { Text("Parlez musique avec Emma...", fontSize = 12.sp, color = TextMuted) },
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = GoldBright,
                     unfocusedBorderColor = BorderSubtle,
@@ -744,8 +974,8 @@ private fun CopilotChatCard(
                 onClick = onSend,
                 enabled = (!isProUnlocked || chatInput.isNotBlank()) && !isTyping,
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Brush.linearGradient(listOf(GoldBright, GoldMetallic)))
                     .testTag("studio_chat_send_btn")
             ) {
@@ -753,7 +983,7 @@ private fun CopilotChatCard(
                     imageVector = if (isProUnlocked) Icons.AutoMirrored.Filled.Send else Icons.Filled.Lock,
                     contentDescription = "Envoyer",
                     tint = Obsidian,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
         }

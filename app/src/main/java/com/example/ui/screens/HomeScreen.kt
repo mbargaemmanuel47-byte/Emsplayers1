@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,11 +22,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -40,7 +36,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -49,19 +44,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.R
 import com.example.model.Track
-import com.example.permissions.PermissionManager
 import com.example.ui.components.TrackArtworkCanvas
 import com.example.ui.components.formatDuration
 import com.example.ui.components.formatFileSize
@@ -86,47 +77,21 @@ fun HomeScreen(
     isScanning: Boolean,
     hapticEnabled: Boolean,
     selectedFilter: String,
-    topOverlayPadding: Dp,
-    bottomOverlayPadding: Dp,
+    topOverlayPadding: Dp = 0.dp,
+    bottomOverlayPadding: Dp = 0.dp,
     onFilterSelected: (String) -> Unit,
     onPlayTrack: (Track) -> Unit,
     onTogglePlayPause: () -> Unit,
     onToggleLike: (Track) -> Unit,
-    onScanDeviceAudio: () -> Unit,
-    onImportSafUri: (Uri) -> Unit,
-    onRefreshPermissions: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenStudio: () -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val triggerHaptic = {
         if (hapticEnabled) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        }
-    }
-
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        onRefreshPermissions()
-        if (granted) onScanDeviceAudio()
-    }
-
-    val safPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) onImportSafUri(uri)
-    }
-
-    val launchScan = {
-        triggerHaptic()
-        if (PermissionManager.hasAudioLibraryPermission(context)) {
-            onScanDeviceAudio()
-        } else {
-            audioPermissionLauncher.launch(PermissionManager.audioLibraryPermission())
         }
     }
 
@@ -147,19 +112,41 @@ fun HomeScreen(
             start = 12.dp,
             end = 12.dp,
             top = topOverlayPadding + 8.dp,
-            bottom = bottomOverlayPadding + 12.dp
+            bottom = bottomOverlayPadding + 10.dp
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Slim compact active-playback card (only ~50dp tall)
+        if (isScanning) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(GoldBright.copy(alpha = 0.12f))
+                        .border(1.dp, BorderGold, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), color = GoldBright, strokeWidth = 2.dp)
+                    Text(
+                        text = "Analyse des fichiers audio en cours...",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GoldLight
+                    )
+                }
+            }
+        }
+
+        // Slim active-playback summary strip
         if (currentTrack != null) {
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(CardDarkSurface.copy(alpha = 0.85f))
-                        .border(1.dp, BorderGold.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                        .background(CardDarkSurface.copy(alpha = 0.88f))
+                        .border(1.dp, BorderGold.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
                         .clickable {
                             triggerHaptic()
                             onOpenPlayer()
@@ -216,88 +203,7 @@ fun HomeScreen(
             }
         }
 
-        // Slim action strip: Scanner / Importer / Studio + compact counter badge
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = launchScan,
-                    enabled = !isScanning,
-                    colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
-                    shape = RoundedCornerShape(11.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .testTag("home_scan_btn")
-                ) {
-                    if (isScanning) {
-                        CircularProgressIndicator(modifier = Modifier.size(13.dp), color = Obsidian, strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(14.dp))
-                    }
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = stringResource(R.string.perm_scan_cta),
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        triggerHaptic()
-                        safPickerLauncher.launch(arrayOf("audio/*"))
-                    },
-                    shape = RoundedCornerShape(11.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .testTag("home_import_btn")
-                ) {
-                    Icon(Icons.Filled.AudioFile, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = stringResource(R.string.perm_saf_cta),
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(11.dp))
-                        .clickable {
-                            triggerHaptic()
-                            onOpenStudio()
-                        }
-                        .padding(horizontal = 9.dp)
-                        .testTag("hero_studio_btn"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = "Studio IA",
-                        tint = GoldLight,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-            }
-        }
-
-        // Compact filter chips + total counters
+        // Compact filter chips + total counters + Studio quick shortcut
         item {
             Row(
                 modifier = Modifier
@@ -335,6 +241,38 @@ fun HomeScreen(
                         )
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                        .clickable {
+                            triggerHaptic()
+                            onOpenStudio()
+                        }
+                        .padding(horizontal = 9.dp, vertical = 5.dp)
+                        .testTag("hero_studio_btn")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = "Studio IA",
+                            tint = GoldLight,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Parler à Emma",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            color = GoldLight
+                        )
+                    }
+                }
                 if (totalPlays > 0) {
                     Text(
                         text = "$totalPlays écoutes",
@@ -357,12 +295,12 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(CardDarkSurface.copy(alpha = 0.85f))
+                        .background(CardDarkSurface.copy(alpha = 0.88f))
                         .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
                         .padding(18.dp)
                         .testTag("home_empty_card"),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -385,11 +323,31 @@ fun HomeScreen(
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        text = "Touchez Scanner ou Importer pour afficher vos sons.",
+                        text = if (selectedFilter == "liked") {
+                            "Touchez le cœur sur un morceau pour l'ajouter ici."
+                        } else {
+                            "Ouvrez l'onglet Biblio pour scanner ou importer vos fichiers audio."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted,
                         textAlign = TextAlign.Center
                     )
+                    if (selectedFilter != "liked") {
+                        Button(
+                            onClick = {
+                                triggerHaptic()
+                                onOpenLibrary()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldBright, contentColor = Obsidian),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp).testTag("home_open_library_btn")
+                        ) {
+                            Icon(Icons.Filled.LibraryMusic, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Ouvrir Biblio", fontSize = 11.5.sp)
+                        }
+                    }
                 }
             }
         } else {
@@ -434,7 +392,7 @@ fun TrackListRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isCurrent) GoldBright.copy(alpha = 0.14f) else Midnight.copy(alpha = 0.56f))
+            .background(if (isCurrent) GoldBright.copy(alpha = 0.14f) else Midnight.copy(alpha = 0.68f))
             .border(
                 1.dp,
                 if (isCurrent) GoldBright.copy(alpha = 0.45f) else BorderSubtle,
