@@ -309,10 +309,21 @@ class AuraAudioController(
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
-                if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
-                    setDataSource(uri.path)
-                } else {
-                    setDataSource(context, uri)
+                var dataSourceSet = false
+                runCatching {
+                    val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
+                    if (afd != null) {
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                        dataSourceSet = true
+                    }
+                }
+                if (!dataSourceSet) {
+                    if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
+                        setDataSource(uri.path)
+                    } else {
+                        setDataSource(context, uri)
+                    }
                 }
                 val base = if (_isMuted.value) 0f else _volume.value
                 val effective = (base * currentCrossfadeGain).coerceIn(0f, 1f)
