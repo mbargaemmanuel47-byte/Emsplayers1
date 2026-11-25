@@ -547,10 +547,11 @@ class AuraAudioController(
                         if (timeline != null) {
                             _spectrumBars.value = timeline.barsAt(posMs.toLong())
                         } else {
-                            val baseLevel = ((if (_isMuted.value) 0f else _volume.value) * 0.44f).coerceIn(0.10f, 0.52f)
+                            val baseLevel = ((if (_isMuted.value) 0f else _volume.value) * 0.48f).coerceIn(0.16f, 0.56f)
                             _spectrumBars.value = List(36) { idx ->
-                                val ripple = abs(sin((posMs / 170.0) + idx * 0.48)).toFloat()
-                                (baseLevel * 0.65f + ripple * 0.35f).coerceIn(0.08f, 0.90f)
+                                val w1 = abs(sin((posMs / 155.0) + idx * 0.44)).toFloat()
+                                val w2 = abs(sin((posMs / 245.0) - idx * 0.28)).toFloat()
+                                (baseLevel * 0.45f + (w1 * 0.65f + w2 * 0.35f) * 0.55f).coerceIn(0.10f, 0.94f)
                             }
                         }
 
@@ -576,9 +577,21 @@ class AuraAudioController(
                                 isPlaying = true
                             )
                         }
+                    } else {
+                        val clock = SystemClock.elapsedRealtime()
+                        _spectrumBars.value = List(36) { idx ->
+                            val pulse = abs(sin((clock / 180.0) + idx * 0.42)).toFloat()
+                            (0.14f + pulse * 0.42f).coerceIn(0.10f, 0.72f)
+                        }
+                    }
+                } else if (_isPlaying.value) {
+                    val clock = SystemClock.elapsedRealtime()
+                    _spectrumBars.value = List(36) { idx ->
+                        val pulse = abs(sin((clock / 180.0) + idx * 0.42)).toFloat()
+                        (0.14f + pulse * 0.42f).coerceIn(0.10f, 0.72f)
                     }
                 }
-                delay(140L)
+                delay(65L)
             }
         }
     }

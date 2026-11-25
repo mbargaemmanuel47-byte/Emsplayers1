@@ -393,4 +393,38 @@ class ExampleRobolectricTest {
             db.close()
         }
     }
+
+    @Test
+    fun `spectrum analyzer computes dynamic FFT bands and interpolates timeline smoothly`() {
+        val sampleRate = 44100
+        val samples = FloatArray(512) { i ->
+            val t = i.toDouble() / sampleRate
+            (0.45 * kotlin.math.sin(2.0 * kotlin.math.PI * 140.0 * t) +
+                0.35 * kotlin.math.sin(2.0 * kotlin.math.PI * 1800.0 * t) +
+                0.20 * kotlin.math.sin(2.0 * kotlin.math.PI * 6200.0 * t)).toFloat()
+        }
+        val bands = com.example.audio.LocalAudioSpectrumAnalyzer.computeFftBands(
+            samples = samples,
+            sampleCount = samples.size,
+            sampleRate = sampleRate,
+            barCount = 36
+        )
+        assertEquals(36, bands.size)
+        val maxAmp = bands.maxOrNull() ?: 0f
+        val minAmp = bands.minOrNull() ?: 1f
+        assertTrue("Expected lively spectral peaks, got max=$maxAmp", maxAmp > 0.45f)
+        assertTrue("Expected frequency variation across bars", maxAmp - minAmp > 0.15f)
+
+        val timeline = com.example.audio.AnalyzedSpectrumTimeline(
+            durationMs = 10_000L,
+            barCount = 36,
+            frames = listOf(
+                List(36) { 0.15f },
+                List(36) { 0.85f }
+            )
+        )
+        val mid = timeline.barsAt(5_000L)
+        assertEquals(36, mid.size)
+        assertEquals(0.50f, mid.first(), 0.02f)
+    }
 }

@@ -21,7 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -429,8 +435,52 @@ fun TrackArtworkCanvas(
 @Composable
 fun AudioVisualizerCanvas(
     bars: List<Float>,
+    isPlaying: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val count = bars.size.coerceAtLeast(1)
+    val latestBars by rememberUpdatedState(bars)
+    val latestPlaying by rememberUpdatedState(isPlaying)
+    val smoothedBars = remember(count) { FloatArray(count) { 0.08f } }
+    var frameClockMs by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(count, isPlaying) {
+        var lastMs = 0L
+        while (true) {
+            withFrameMillis { nowMs ->
+                val dt = if (lastMs == 0L) 16f else (nowMs - lastMs).coerceIn(4L, 64L).toFloat()
+                lastMs = nowMs
+                val targets = latestBars
+                val playing = latestPlaying
+                val smoothRate = (dt / 75f).coerceIn(0.08f, 0.65f)
+                val phase = nowMs * 0.0052f
+
+                var allSettled = true
+                for (i in 0 until count) {
+                    val rawTarget = if (playing) {
+                        val base = targets.getOrElse(i) { 0.14f }.coerceIn(0.08f, 1.0f)
+                        val wave = (sin(phase + i * 0.58f) * 0.5f + 0.5f)
+                        val crest = (sin(phase * 1.37f - i * 0.34f) * 0.5f + 0.5f)
+                        val liveBoost = 0.10f + (wave * 0.65f + crest * 0.35f) * 0.24f
+                        maxOf(base, liveBoost * (0.65f + base * 0.55f)).coerceIn(0.10f, 1.0f)
+                    } else {
+                        0.08f
+                    }
+                    val next = smoothedBars[i] + (rawTarget - smoothedBars[i]) * smoothRate
+                    smoothedBars[i] = next
+                    if (kotlin.math.abs(next - 0.08f) > 0.004f) {
+                        allSettled = false
+                    }
+                }
+                frameClockMs = nowMs
+                if (!playing && allSettled) {
+                    lastMs = -1L
+                }
+            }
+            if (!latestPlaying && lastMs == -1L) break
+        }
+    }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
@@ -438,15 +488,17 @@ fun AudioVisualizerCanvas(
             .border(1.dp, Color.White.copy(alpha = 0.09f), RoundedCornerShape(14.dp))
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val count = bars.size.coerceAtLeast(1)
+            // Read frameClockMs inside DrawScope so redraws happen smoothly without recomposing parent UI
+            @Suppress("UNUSED_VARIABLE")
+            val tick = frameClockMs
             val horizontalPad = 10.dp.toPx()
             val availW = (size.width - horizontalPad * 2).coerceAtLeast(1f)
             val gap = 2.5.dp.toPx()
             val barWidth = ((availW - gap * (count - 1)) / count).coerceAtLeast(2f)
 
             for (i in 0 until count) {
-                val amp = bars[i].coerceIn(0.06f, 1.0f)
-                val barHeight = (amp * size.height * 0.80f).coerceAtLeast(4.dp.toPx())
+                val amp = smoothedBars[i].coerceIn(0.08f, 1.0f)
+                val barHeight = (amp * size.height * 0.82f).coerceAtLeast(4.dp.toPx())
                 val x = horizontalPad + i * (barWidth + gap)
                 val y = (size.height - barHeight) / 2f
 

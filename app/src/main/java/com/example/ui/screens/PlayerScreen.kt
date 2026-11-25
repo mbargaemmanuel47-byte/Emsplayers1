@@ -396,6 +396,7 @@ private fun PlayerDeckCard(
         // Sleek spectrum visualizer
         AudioVisualizerCanvas(
             bars = spectrumBars,
+            isPlaying = isPlaying,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(30.dp)
