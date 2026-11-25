@@ -49,6 +49,9 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
+          if [ ! -f app/google-services.json ]; then
+            echo "::warning::app/google-services.json absent du dépôt GitHub : Firebase AI Logic sera désactivé dans cet APK."
+          fi
           : > .env
           if [ -n "$GROQ_API_KEY" ]; then
             printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> .env

@@ -156,7 +156,7 @@ class MusicAssistantManager(
         }
     }
 
-    private fun isFirebaseReady(): Boolean {
+    internal fun isFirebaseReady(): Boolean {
         if (FirebaseApp.getApps(appContext).isEmpty()) {
             runCatching { FirebaseApp.initializeApp(appContext) }
                 .onFailure { Log.w(TAG, "FirebaseApp init skipped: ${it.message}") }
@@ -164,9 +164,22 @@ class MusicAssistantManager(
         return FirebaseApp.getApps(appContext).isNotEmpty()
     }
 
-    private fun hasGroqKey(): Boolean {
+    internal fun hasGroqKey(): Boolean {
         val key = groqApiKeyProvider().trim()
         return key.isNotEmpty() && key != "GROQ_API_KEY_DEFAULT_VALUE"
+    }
+
+    internal fun buildMissingConfigMessage(): String {
+        val firebaseOk = isFirebaseReady()
+        val groqOk = hasGroqKey()
+        return when {
+            !firebaseOk && !groqOk ->
+                "Service IA non configuré dans cet APK : ajoutez GROQ_API_KEY dans les secrets (AI Studio / GitHub Actions) et vérifiez google-services.json."
+            !groqOk ->
+                "Accès Firebase refusé sur ce build Debug et clé de secours GROQ_API_KEY absente."
+            else ->
+                "Emma est momentanément indisponible."
+        }
     }
 
     private fun isNetworkUnavailable(e: Throwable): Boolean {
@@ -261,8 +274,11 @@ class MusicAssistantManager(
             }
         }
 
-        val err = primaryFailure ?: IllegalStateException("Emma est momentanément indisponible.")
-        throw IllegalStateException(mapUserError(err, "Erreur lors de la création du mix."))
+        val err = primaryFailure
+        if (err != null) {
+            throw IllegalStateException(mapUserError(err, "Erreur lors de la création du mix."))
+        }
+        throw IllegalStateException(buildMissingConfigMessage())
     }
 
     fun streamChatReply(
@@ -351,8 +367,11 @@ class MusicAssistantManager(
             }
         }
 
-        val err = primaryFailure ?: IllegalStateException("Emma est momentanément indisponible.")
-        throw IllegalStateException(mapUserError(err, "Erreur de connexion avec Emma. Réessayez."))
+        val err = primaryFailure
+        if (err != null) {
+            throw IllegalStateException(mapUserError(err, "Erreur de connexion avec Emma. Réessayez."))
+        }
+        throw IllegalStateException(buildMissingConfigMessage())
     }.flowOn(Dispatchers.IO)
 
     suspend fun generateProactiveNotificationCopy(profile: ListeningBehaviorProfile): ProactiveNotificationDraft? {

@@ -196,7 +196,10 @@ class ExampleRobolectricTest {
         assertEquals("openai/gpt-oss-120b", com.example.ai.MusicAssistantManager.GROQ_PRIMARY_MODEL)
         assertNotNull(BuildConfig.GROQ_API_KEY)
 
-        val manager = com.example.ai.MusicAssistantManager(context) { "" }
+        val manager = com.example.ai.MusicAssistantManager(context) { "GROQ_API_KEY_DEFAULT_VALUE" }
+        assertTrue("FirebaseApp should initialize from google-services.json", manager.isFirebaseReady())
+        assertFalse(manager.hasGroqKey())
+        assertTrue(manager.buildMissingConfigMessage().contains("GROQ_API_KEY"))
         val sampleTrack = Track(
             id = 42L,
             title = "Zouk Étoile",
