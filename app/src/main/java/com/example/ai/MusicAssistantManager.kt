@@ -161,7 +161,11 @@ class MusicAssistantManager(
             runCatching { FirebaseApp.initializeApp(appContext) }
                 .onFailure { Log.w(TAG, "FirebaseApp init skipped: ${it.message}") }
         }
-        return FirebaseApp.getApps(appContext).isNotEmpty()
+        val ready = FirebaseApp.getApps(appContext).isNotEmpty()
+        if (ready) {
+            ensureReleaseAppCheckInstalled(appContext)
+        }
+        return ready
     }
 
     internal fun hasGroqKey(): Boolean {
@@ -174,9 +178,11 @@ class MusicAssistantManager(
         val groqOk = hasGroqKey()
         return when {
             !firebaseOk && !groqOk ->
-                "Service IA non configuré dans cet APK : ajoutez GROQ_API_KEY dans les secrets (AI Studio / GitHub Actions) et vérifiez google-services.json."
+                "Service IA non configuré dans cet APK : vérifiez app/google-services.json ou ajoutez GROQ_API_KEY dans les secrets."
+            !groqOk && BuildConfig.DEBUG ->
+                "Build Debug hors AI Studio : utilisez la version Release (reCAPTCHA) ou configurez GROQ_API_KEY."
             !groqOk ->
-                "Accès Firebase refusé sur ce build Debug et clé de secours GROQ_API_KEY absente."
+                "Emma est momentanément indisponible (clé de secours GROQ_API_KEY non définie)."
             else ->
                 "Emma est momentanément indisponible."
         }

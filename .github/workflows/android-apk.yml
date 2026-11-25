@@ -45,7 +45,7 @@ jobs:
             ln -sfn "$SDK_DIR/platforms/android-36" "$SDK_DIR/platforms/android-36.1"
           fi
 
-      - name: Prepare .env & debug keystore
+      - name: Prepare .env & keystores
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
@@ -55,8 +55,6 @@ jobs:
           : > .env
           if [ -n "$GROQ_API_KEY" ]; then
             printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> .env
-          else
-            echo "::warning::Secret GROQ_API_KEY absent de Settings > Secrets > Actions : le repli Groq ne sera pas actif dans cet APK."
           fi
           if [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
@@ -71,20 +69,39 @@ jobs:
               -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
+          rm -f /tmp/ci-upload.jks
+          CI_PASS=$(openssl rand -hex 16)
+          echo "::add-mask::$CI_PASS"
+          echo "CI_UPLOAD_PASS=$CI_PASS" >> "$GITHUB_ENV"
+          keytool -genkeypair -noprompt \
+            -keystore /tmp/ci-upload.jks \
+            -storepass "$CI_PASS" \
+            -alias upload \
+            -keypass "$CI_PASS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=CI Upload,O=EmPlayer,C=CM"
 
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: Build Debug APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Build Release APK (reCAPTCHA App Check ready)
+        env:
+          KEYSTORE_PATH: /tmp/ci-upload.jks
+          STORE_PASSWORD: ${{ env.CI_UPLOAD_PASS }}
+          KEY_PASSWORD: ${{ env.CI_UPLOAD_PASS }}
+        run: |
+          gradle :app:assembleRelease --no-daemon --stacktrace
+          rm -f /tmp/ci-upload.jks
 
-      - name: Align, Sign (v1 + v2) & Verify APK
+      - name: Align, Sign (v1 + v2 with registered SHA-1) & Verify APK
         run: |
           SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           BT_DIR=$(ls -d "$SDK_DIR/build-tools"/* | sort -V | tail -n 1)
-          "$BT_DIR/zipalign" -p -f 4 app/build/outputs/apk/debug/app-debug.apk app-aligned.apk
+          "$BT_DIR/zipalign" -p -f 4 app/build/outputs/apk/release/app-release.apk app-aligned.apk
           "$BT_DIR/apksigner" sign \
             --min-sdk-version 21 \
             --v1-signing-enabled true \
@@ -114,5 +131,5 @@ jobs:
           else
             gh release create latest EmPlayer.apk \
               --title "Em Player APK" \
-              --notes "APK Android Em Player (signé v1 + v2, compatible Android 6.0+)."
+              --notes "APK Android Em Player (Release reCAPTCHA App Check, signé v1 + v2, compatible Android 6.0+ et partage Bluetooth/Xender)."
           fi

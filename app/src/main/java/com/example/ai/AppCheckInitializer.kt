@@ -8,6 +8,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.recaptcha.RecaptchaAppCheckProviderFactory
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "AppCheckInit"
 
@@ -15,6 +16,8 @@ private const val DEBUG_TOKEN_EXTRA = "FIREBASE_APPCHECK_DEBUG_TOKEN"
 private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store."
 private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
 private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
+
+private val appCheckInstalled = AtomicBoolean(false)
 
 /**
  * Configures Firebase App Check before Compose UI or ViewModels are created.
@@ -50,6 +53,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
             FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
             )
+            appCheckInstalled.set(true)
             Log.d(TAG, "DebugAppCheckProviderFactory installed.")
         } else {
             val resId = context.resources.getIdentifier(
@@ -63,6 +67,7 @@ fun configureAppCheck(context: Context, intent: Intent?) {
                     FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
                         RecaptchaAppCheckProviderFactory.getInstance(siteKey)
                     )
+                    appCheckInstalled.set(true)
                     Log.d(TAG, "RecaptchaAppCheckProviderFactory installed.")
                 } else {
                     Log.e(TAG, "recaptcha_site_key resource string is blank.")
@@ -73,5 +78,15 @@ fun configureAppCheck(context: Context, intent: Intent?) {
         }
     } catch (e: Exception) {
         Log.e(TAG, "Failed to initialize Firebase App Check", e)
+    }
+}
+
+/**
+ * Ensures release reCAPTCHA App Check is configured even if a background WorkManager job
+ * starts before MainActivity. Never alters Debug builds.
+ */
+internal fun ensureReleaseAppCheckInstalled(context: Context) {
+    if (!BuildConfig.DEBUG && !appCheckInstalled.get()) {
+        configureAppCheck(context.applicationContext, null)
     }
 }
