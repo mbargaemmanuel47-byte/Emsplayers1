@@ -10,6 +10,9 @@ import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import com.example.model.AudioSettingsState
@@ -75,6 +78,44 @@ class AuraAudioController(
     private var currentAudioSettings = AudioSettingsState()
     private var currentCrossfadeGain = 1.0f
     private var focusRequest: AudioFocusRequest? = null
+    private var hasAudioFocus: Boolean = false
+    private var pausedByTransientFocusLoss: Boolean = false
+    private var isDucked: Boolean = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                hasAudioFocus = true
+                if (isDucked) {
+                    isDucked = false
+                    applyEffectiveVolume()
+                }
+                if (pausedByTransientFocusLoss && !_isPlaying.value) {
+                    pausedByTransientFocusLoss = false
+                    resume(activeTrack)
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                isDucked = true
+                applyEffectiveVolume()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (_isPlaying.value) {
+                    pausedByTransientFocusLoss = true
+                    pauseInternal(abandonFocus = false)
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                hasAudioFocus = false
+                pausedByTransientFocusLoss = false
+                isDucked = false
+                if (_isPlaying.value) {
+                    pauseInternal(abandonFocus = false)
+                }
+            }
+        }
+    }
 
     var onTrackFinishedCallback: (() -> Unit)? = null
     var onPlaybackErrorCallback: ((String) -> Unit)? = null
@@ -133,6 +174,11 @@ class AuraAudioController(
     }
 
     fun pause() {
+        pausedByTransientFocusLoss = false
+        pauseInternal(abandonFocus = false)
+    }
+
+    private fun pauseInternal(abandonFocus: Boolean) {
         transitionJob?.cancel()
         val currentMs = if (isPrepared) {
             runCatching { mediaPlayer?.currentPosition ?: (_currentPositionSec.value * 1000f).toInt() }
@@ -150,6 +196,9 @@ class AuraAudioController(
         progressJob?.cancel()
         _spectrumBars.value = List(36) { 0.08f }
         _dspStatus.value = "En pause"
+        if (abandonFocus) {
+            abandonAudioFocus()
+        }
         activeTrack?.let {
             pushNotificationUpdate(it, isPlaying = false, positionMs = currentMs.toLong())
         }
@@ -157,6 +206,7 @@ class AuraAudioController(
 
     fun pauseWithoutNotification() {
         transitionJob?.cancel()
+        pausedByTransientFocusLoss = false
         _isPlaying.value = false
         runCatching {
             if (isPrepared && mediaPlayer?.isPlaying == true) {
@@ -170,6 +220,8 @@ class AuraAudioController(
 
     fun resume(fallbackTrack: Track?) {
         val target = activeTrack ?: fallbackTrack ?: return
+        pausedByTransientFocusLoss = false
+        isDucked = false
         if (!requestAudioFocus()) {
             onPlaybackErrorCallback?.invoke("Accès à la sortie audio refusé.")
             return
@@ -178,6 +230,7 @@ class AuraAudioController(
         val mp = mediaPlayer
         if (mp != null) {
             _isPlaying.value = true
+            applyEffectiveVolume()
             if (isPrepared) {
                 runCatching {
                     val seekTarget = pendingSeekMs
@@ -290,16 +343,13 @@ class AuraAudioController(
 
     private fun applyEffectiveVolume() {
         val base = if (_isMuted.value) 0f else _volume.value
-        val effective = (base * currentCrossfadeGain).coerceIn(0f, 1f)
+        val duckFactor = if (isDucked) 0.25f else 1.0f
+        val effective = (base * currentCrossfadeGain * duckFactor).coerceIn(0f, 1f)
         runCatching { mediaPlayer?.setVolume(effective, effective) }
     }
 
     private fun startLocalMediaPlayer(track: Track, uriStr: String) {
         val uri = Uri.parse(uriStr)
-
-        analyzerJob = scope.launch {
-            analyzedSpectrum = LocalAudioSpectrumAnalyzer.analyze(context, uri, barCount = 36)
-        }
 
         try {
             val mp = MediaPlayer().apply {
@@ -309,29 +359,36 @@ class AuraAudioController(
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
+                runCatching { setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK) }
+
                 var dataSourceSet = false
-                runCatching {
-                    val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
-                    if (afd != null) {
-                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                        afd.close()
-                        dataSourceSet = true
+                if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
+                    setDataSource(uri.path)
+                    dataSourceSet = true
+                } else {
+                    runCatching {
+                        context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+                            if (afd.declaredLength >= 0L) {
+                                setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
+                            } else {
+                                setDataSource(afd.fileDescriptor)
+                            }
+                            dataSourceSet = true
+                        }
                     }
                 }
                 if (!dataSourceSet) {
-                    if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
-                        setDataSource(uri.path)
-                    } else {
-                        setDataSource(context, uri)
-                    }
+                    setDataSource(context, uri)
                 }
+
                 val base = if (_isMuted.value) 0f else _volume.value
-                val effective = (base * currentCrossfadeGain).coerceIn(0f, 1f)
+                val duckFactor = if (isDucked) 0.25f else 1.0f
+                val effective = (base * currentCrossfadeGain * duckFactor).coerceIn(0f, 1f)
                 setVolume(effective, effective)
 
                 setOnPreparedListener { player ->
+                    if (mediaPlayer !== player) return@setOnPreparedListener
                     isPrepared = true
-                    attachAudioEffects(player.audioSessionId)
                     val realDurationMs = runCatching { player.duration.toLong() }.getOrDefault(0L)
                     if (realDurationMs > 0L) {
                         activeTrackDurationMs = realDurationMs
@@ -356,9 +413,19 @@ class AuraAudioController(
                     } else {
                         _dspStatus.value = "En pause"
                     }
+
+                    attachAudioEffectsIfNeeded(player.audioSessionId)
+                    analyzerJob?.cancel()
+                    analyzerJob = scope.launch {
+                        delay(450L)
+                        if (isActive && activeTrack?.id == track.id) {
+                            analyzedSpectrum = LocalAudioSpectrumAnalyzer.analyze(context, uri, barCount = 36)
+                        }
+                    }
                 }
 
                 setOnCompletionListener { player ->
+                    if (mediaPlayer !== player) return@setOnCompletionListener
                     if (_isRepeat.value) {
                         _currentPositionSec.value = 0f
                         runCatching {
@@ -371,7 +438,8 @@ class AuraAudioController(
                     }
                 }
 
-                setOnErrorListener { _, what, extra ->
+                setOnErrorListener { player, what, extra ->
+                    if (mediaPlayer !== player) return@setOnErrorListener true
                     Log.e(TAG, "Playback error what=$what extra=$extra for uri=$uri")
                     isPrepared = false
                     _isPlaying.value = false
@@ -395,43 +463,59 @@ class AuraAudioController(
         }
     }
 
-    private fun attachAudioEffects(sessionId: Int) {
+    private fun attachAudioEffectsIfNeeded(sessionId: Int) {
         releaseAudioEffects()
-        runCatching {
-            hardwareEq = Equalizer(0, sessionId).apply { enabled = true }
-            hardwareVirtualizer = Virtualizer(0, sessionId).apply {
-                enabled = currentAudioSettings.spatial3dEnabled
-            }
-            loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                enabled = currentAudioSettings.normalizeEnabled
-                if (currentAudioSettings.normalizeEnabled) {
-                    setTargetGain(250)
-                }
-            }
-            applyHardwareEffects(currentAudioSettings)
-        }
+        applyHardwareEffects(currentAudioSettings, sessionId = sessionId)
     }
 
-    private fun applyHardwareEffects(settings: AudioSettingsState) {
+    private fun applyHardwareEffects(settings: AudioSettingsState, sessionId: Int = mediaPlayer?.audioSessionId ?: 0) {
+        val eqActive = settings.eqGainsDb.any { abs(it) > 0.1f }
+        if (eqActive && hardwareEq == null && isPrepared && sessionId != 0) {
+            runCatching {
+                hardwareEq = Equalizer(0, sessionId).apply { enabled = true }
+            }
+        }
         runCatching {
             hardwareEq?.let { eq ->
-                val bandCount = eq.numberOfBands.toInt()
-                val range = eq.bandLevelRange
-                val minLevel = range[0].toInt()
-                val maxLevel = range[1].toInt()
-                for (b in 0 until bandCount) {
-                    val mappedIdx = ((b.toFloat() / bandCount.coerceAtLeast(1)) * settings.eqGainsDb.size).toInt()
-                        .coerceIn(0, settings.eqGainsDb.lastIndex)
-                    val targetMb = (settings.eqGainsDb[mappedIdx] * 100f).toInt().coerceIn(minLevel, maxLevel)
-                    eq.setBandLevel(b.toShort(), targetMb.toShort())
+                eq.enabled = eqActive
+                if (eqActive) {
+                    val bandCount = eq.numberOfBands.toInt()
+                    val range = eq.bandLevelRange
+                    val minLevel = range[0].toInt()
+                    val maxLevel = range[1].toInt()
+                    for (b in 0 until bandCount) {
+                        val mappedIdx = ((b.toFloat() / bandCount.coerceAtLeast(1)) * settings.eqGainsDb.size).toInt()
+                            .coerceIn(0, settings.eqGainsDb.lastIndex)
+                        val targetMb = (settings.eqGainsDb[mappedIdx] * 100f).toInt().coerceIn(minLevel, maxLevel)
+                        eq.setBandLevel(b.toShort(), targetMb.toShort())
+                    }
                 }
             }
+        }
+
+        if (settings.spatial3dEnabled && hardwareVirtualizer == null && isPrepared && sessionId != 0) {
+            runCatching {
+                hardwareVirtualizer = Virtualizer(0, sessionId).apply { enabled = true }
+            }
+        }
+        runCatching {
             hardwareVirtualizer?.let { virt ->
                 virt.enabled = settings.spatial3dEnabled
                 if (settings.spatial3dEnabled && virt.strengthSupported) {
                     virt.setStrength(750.toShort())
                 }
             }
+        }
+
+        if (settings.normalizeEnabled && loudnessEnhancer == null && isPrepared && sessionId != 0) {
+            runCatching {
+                loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
+                    enabled = true
+                    setTargetGain(250)
+                }
+            }
+        }
+        runCatching {
             loudnessEnhancer?.let { le ->
                 le.enabled = settings.normalizeEnabled
                 if (settings.normalizeEnabled) le.setTargetGain(250)
@@ -500,8 +584,9 @@ class AuraAudioController(
     }
 
     private fun requestAudioFocus(): Boolean {
+        if (hasAudioFocus) return true
         val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            val req = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -509,39 +594,47 @@ class AuraAudioController(
                         .build()
                 )
                 .setAcceptsDelayedFocusGain(true)
-                .setOnAudioFocusChangeListener { change ->
-                    if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                        pause()
-                    }
-                }
+                .setOnAudioFocusChangeListener(audioFocusListener, mainHandler)
                 .build()
-            focusRequest = req
+                .also { focusRequest = it }
             audioManager.requestAudioFocus(req)
         } else {
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
-                { change ->
-                    if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                        pause()
-                    }
-                },
+                audioFocusListener,
                 AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN
             )
         }
+        hasAudioFocus = (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         return result != AudioManager.AUDIOFOCUS_REQUEST_FAILED
+    }
+
+    private fun abandonAudioFocus() {
+        if (!hasAudioFocus && focusRequest == null) return
+        hasAudioFocus = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
+        } else {
+            @Suppress("DEPRECATION")
+            runCatching { audioManager.abandonAudioFocus(audioFocusListener) }
+        }
     }
 
     private fun stopEnginesOnly() {
         progressJob?.cancel()
         isPrepared = false
+        val oldPlayer = mediaPlayer
+        mediaPlayer = null
         runCatching {
-            if (mediaPlayer?.isPlaying == true) {
-                mediaPlayer?.stop()
+            oldPlayer?.setOnPreparedListener(null)
+            oldPlayer?.setOnCompletionListener(null)
+            oldPlayer?.setOnErrorListener(null)
+            if (oldPlayer?.isPlaying == true) {
+                oldPlayer.stop()
             }
         }
-        runCatching { mediaPlayer?.release() }
-        mediaPlayer = null
+        runCatching { oldPlayer?.release() }
         releaseAudioEffects()
     }
 
@@ -558,9 +651,7 @@ class AuraAudioController(
         transitionJob?.cancel()
         analyzerJob?.cancel()
         stopEnginesOnly()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-        }
+        abandonAudioFocus()
         AuraPlaybackService.stopService(context)
     }
 }

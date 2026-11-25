@@ -28,6 +28,7 @@ import com.example.notifications.ProactiveEmmaCoordinator
 import com.example.notifications.ProactiveEvaluationOutcome
 import com.example.permissions.AndroidPermissionStatus
 import com.example.permissions.PermissionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -193,6 +194,20 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        PlaybackNotificationBridge.onPlayAction = {
+            viewModelScope.launch {
+                if (!isPlaying.value) {
+                    currentTrack.value?.let { audioController.resume(it) }
+                }
+            }
+        }
+        PlaybackNotificationBridge.onPauseAction = {
+            viewModelScope.launch {
+                if (isPlaying.value) {
+                    audioController.pause()
+                }
+            }
+        }
         PlaybackNotificationBridge.onPlayPauseAction = {
             viewModelScope.launch { togglePlayPause() }
         }
@@ -424,6 +439,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 result.trackIds.firstOrNull()?.let { playTrackById(it) }
                 onMixReady()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val msg = e.localizedMessage ?: "Erreur lors de la création du mix."
                 _aiPlaylistState.value = AiGenerationUiState.Error(msg)
@@ -483,6 +500,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 showToast("Playlist créée", "${result.trackIds.size} titres sélectionnés")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _aiPlaylistState.value = AiGenerationUiState.Error(
                     e.localizedMessage ?: "Erreur lors de la création de la playlist."
@@ -584,6 +603,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 _chatMessages.value = _chatMessages.value.map { msg ->
                     if (msg.id == aiMsgId) msg.copy(text = latestText, isStreaming = false) else msg
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _chatMessages.value = _chatMessages.value.map { msg ->
                     if (msg.id == aiMsgId) {

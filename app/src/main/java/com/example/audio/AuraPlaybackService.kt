@@ -27,6 +27,8 @@ import com.example.MainActivity
 import com.example.R
 
 object PlaybackNotificationBridge {
+    var onPlayAction: (() -> Unit)? = null
+    var onPauseAction: (() -> Unit)? = null
     var onPlayPauseAction: (() -> Unit)? = null
     var onNextAction: (() -> Unit)? = null
     var onPrevAction: (() -> Unit)? = null
@@ -56,6 +58,9 @@ class AuraPlaybackService : Service() {
         const val EXTRA_PRIMARY_COLOR = "extra_primary_color"
         const val EXTRA_SECONDARY_COLOR = "extra_secondary_color"
         const val EXTRA_TERTIARY_COLOR = "extra_tertiary_color"
+
+        @Volatile
+        private var isForegroundActive: Boolean = false
 
         fun updateNotification(
             context: Context,
@@ -94,6 +99,7 @@ class AuraPlaybackService : Service() {
             durationMs: Long,
             isPlaying: Boolean
         ) {
+            if (!isForegroundActive) return
             val intent = Intent(context, AuraPlaybackService::class.java).apply {
                 action = ACTION_PROGRESS
                 putExtra(EXTRA_POSITION_MS, positionMs)
@@ -104,6 +110,7 @@ class AuraPlaybackService : Service() {
         }
 
         fun stopService(context: Context) {
+            isForegroundActive = false
             runCatching { context.stopService(Intent(context, AuraPlaybackService::class.java)) }
         }
     }
@@ -128,11 +135,13 @@ class AuraPlaybackService : Service() {
         mediaSession = MediaSession(this, "EmPlayerSession").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() {
-                    PlaybackNotificationBridge.onPlayPauseAction?.invoke()
+                    PlaybackNotificationBridge.onPlayAction?.invoke()
+                        ?: PlaybackNotificationBridge.onPlayPauseAction?.invoke()
                 }
 
                 override fun onPause() {
-                    PlaybackNotificationBridge.onPlayPauseAction?.invoke()
+                    PlaybackNotificationBridge.onPauseAction?.invoke()
+                        ?: PlaybackNotificationBridge.onPlayPauseAction?.invoke()
                 }
 
                 override fun onSkipToNext() {
@@ -202,6 +211,7 @@ class AuraPlaybackService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        isForegroundActive = true
 
         return START_NOT_STICKY
     }
@@ -425,6 +435,7 @@ class AuraPlaybackService : Service() {
     }
 
     private fun stopForegroundCompat() {
+        isForegroundActive = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
@@ -434,6 +445,7 @@ class AuraPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        isForegroundActive = false
         mediaSession?.isActive = false
         mediaSession?.release()
         mediaSession = null

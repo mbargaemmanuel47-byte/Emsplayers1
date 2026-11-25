@@ -35,12 +35,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.R
 import com.example.model.Track
 import com.example.ui.theme.GoldBright
 import com.example.ui.theme.GoldLight
@@ -81,27 +80,178 @@ fun EmPlayerLogo(
     isPlaying: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val transition = rememberInfiniteTransition(label = "em_logo_pulse")
-    val pulse by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.06f,
+    val transition = rememberInfiniteTransition(label = "em_logo_motion")
+    val wavePhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            animation = tween(durationMillis = if (isPlaying) 1500 else 3400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "logo_wave_phase"
+    )
+    val ringRotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (isPlaying) 6500 else 15000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "logo_ring_rotation"
+    )
+    val glowPulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = if (isPlaying) 900 else 2200, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "logo_scale"
+        label = "logo_glow_pulse"
     )
 
-    Image(
-        painter = painterResource(id = R.drawable.em_player_custom_icon),
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        modifier = modifier.graphicsLayer {
-            val s = if (isPlaying) pulse else 1f
-            scaleX = s
-            scaleY = s
+    val subtleScale = if (isPlaying) 1f + 0.05f * glowPulse else 1f + 0.02f * glowPulse
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = subtleScale
+                scaleY = subtleScale
+            }
+            .clip(CircleShape)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val d = minOf(size.width, size.height)
+            if (d <= 0f) return@Canvas
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = d / 2f
+
+            // Deep midnight circular backdrop matching emblem
+            drawCircle(
+                brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFF0A1432), Color(0xFF040B25)),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height)
+                ),
+                radius = radius,
+                center = center
+            )
+
+            // Warm golden radial aura slowly breathing
+            val auraCenter = Offset(
+                x = center.x - radius * 0.24f + radius * 0.10f * cos(wavePhase),
+                y = center.y - radius * 0.24f + radius * 0.10f * sin(wavePhase)
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        GoldBright.copy(alpha = if (isPlaying) 0.42f else 0.28f),
+                        GoldMetallic.copy(alpha = 0.14f),
+                        Color.Transparent
+                    ),
+                    center = auraCenter,
+                    radius = radius * 0.85f
+                ),
+                radius = radius * 0.94f,
+                center = center
+            )
+
+            // Rotating dashed golden outer ring
+            rotate(degrees = ringRotation, pivot = center) {
+                val dashLen = (d * 0.065f).coerceAtLeast(2.2f)
+                val gapLen = (d * 0.055f).coerceAtLeast(2.0f)
+                drawCircle(
+                    color = GoldBright.copy(alpha = 0.68f),
+                    radius = radius * 0.68f,
+                    center = center,
+                    style = Stroke(
+                        width = (d * 0.028f).coerceAtLeast(1.1f),
+                        cap = StrokeCap.Round,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(dashLen, gapLen), 0f)
+                    )
+                )
+            }
+
+            // Thin subtle inner white circle
+            drawCircle(
+                color = Color.White.copy(alpha = 0.30f),
+                radius = radius * 0.42f,
+                center = center,
+                style = Stroke(width = (d * 0.018f).coerceAtLeast(0.8f))
+            )
+
+            // Clip living sine waves inside circular interior
+            val clipCircle = Path().apply {
+                addOval(
+                    androidx.compose.ui.geometry.Rect(
+                        center.x - radius * 0.82f,
+                        center.y - radius * 0.82f,
+                        center.x + radius * 0.82f,
+                        center.y + radius * 0.82f
+                    )
+                )
+            }
+
+            clipPath(clipCircle) {
+                val startX = center.x - radius * 0.60f
+                val endX = center.x + radius * 0.60f
+                val spanX = endX - startX
+                val steps = 28
+                val ampPrimary = radius * (if (isPlaying) 0.26f else 0.20f)
+                val ampSecondary = radius * (if (isPlaying) 0.19f else 0.14f)
+
+                val goldWave = Path()
+                val silverWave = Path()
+                for (i in 0..steps) {
+                    val t = i.toFloat() / steps
+                    val x = startX + spanX * t
+                    // Smooth taper near wave ends like reference emblem
+                    val envelope = sin(t * PI).toFloat()
+                    val yGold = center.y - radius * 0.04f -
+                        ampPrimary * envelope * sin(t * 2.15f * PI.toFloat() + wavePhase)
+                    val ySilver = center.y + radius * 0.12f -
+                        ampSecondary * envelope * sin(t * 2.25f * PI.toFloat() + wavePhase - 0.85f)
+
+                    if (i == 0) {
+                        goldWave.moveTo(x, yGold)
+                        silverWave.moveTo(x, ySilver)
+                    } else {
+                        goldWave.lineTo(x, yGold)
+                        silverWave.lineTo(x, ySilver)
+                    }
+                }
+
+                drawPath(
+                    path = silverWave,
+                    color = Color.White.copy(alpha = 0.80f),
+                    style = Stroke(
+                        width = (d * 0.036f).coerceAtLeast(1.4f),
+                        cap = StrokeCap.Round
+                    )
+                )
+                drawPath(
+                    path = goldWave,
+                    color = GoldBright,
+                    style = Stroke(
+                        width = (d * 0.062f).coerceAtLeast(2.2f),
+                        cap = StrokeCap.Round
+                    )
+                )
+            }
+
+            // Signature outer gold-to-blue circular border ring
+            val borderWidth = (d * 0.068f).coerceAtLeast(2.0f)
+            drawCircle(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(GoldBright, GoldLight, RoyalBlueAccent),
+                    startX = center.x - radius,
+                    endX = center.x + radius
+                ),
+                radius = radius - borderWidth / 2f,
+                center = center,
+                style = Stroke(width = borderWidth)
+            )
         }
-    )
+    }
 }
 
 @Composable

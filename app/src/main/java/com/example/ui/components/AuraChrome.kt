@@ -156,7 +156,9 @@ fun AuraTopHeader(
                 ) {
                     EmPlayerLogo(
                         isPlaying = isPlaying,
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier
+                            .size(34.dp)
+                            .testTag("em_player_animated_logo")
                     )
                     Text(
                         text = buildAnnotatedString {

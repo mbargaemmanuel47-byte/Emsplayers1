@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +21,7 @@ class NavigationBugTest {
     @Test
     fun `navigate away from home to every tab and verify scanner and importer live strictly in library`() {
         composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("em_player_animated_logo").assertIsDisplayed()
         composeTestRule.onNodeWithTag("home_filter_all").assertIsDisplayed()
         composeTestRule.onNodeWithTag("home_open_library_btn").assertIsDisplayed()
         composeTestRule.onNodeWithTag("home_scan_btn").assertDoesNotExist()
@@ -28,7 +30,7 @@ class NavigationBugTest {
         // Studio -> Home
         composeTestRule.onNodeWithTag("nav_studio").performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("studio_chat_input").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("studio_chat_input").performScrollTo().assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("nav_home").performClick()
         composeTestRule.waitForIdle()

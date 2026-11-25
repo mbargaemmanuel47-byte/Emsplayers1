@@ -41,6 +41,8 @@ class MusicAssistantManager(
 ) {
 
     companion object {
+        const val GEMINI_PRIMARY_MODEL = "gemini-3.8-flash"
+        const val GEMINI_LITE_MODEL = "gemini-3.5-flash-lite"
         const val GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
         const val GROQ_PRIMARY_MODEL = "openai/gpt-oss-120b"
         const val GROQ_SECONDARY_MODEL = "llama-3.3-70b-versatile"
@@ -90,7 +92,21 @@ class MusicAssistantManager(
 
     private val structuredModel by lazy {
         Firebase.ai.generativeModel(
-            modelName = "gemini-3.8-flash",
+            modelName = GEMINI_PRIMARY_MODEL,
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = playlistSchema
+                temperature = 0.7f
+            },
+            systemInstruction = content {
+                text(EMMA_PLAYLIST_INSTRUCTION)
+            }
+        )
+    }
+
+    private val structuredLiteModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = GEMINI_LITE_MODEL,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = playlistSchema
@@ -104,7 +120,7 @@ class MusicAssistantManager(
 
     private val proactiveNotificationModel by lazy {
         Firebase.ai.generativeModel(
-            modelName = "gemini-3.5-flash-lite",
+            modelName = GEMINI_LITE_MODEL,
             generationConfig = generationConfig {
                 temperature = 0.8f
                 maxOutputTokens = 70
@@ -211,32 +227,33 @@ class MusicAssistantManager(
 
         var primaryFailure: Exception? = null
         if (isFirebaseReady()) {
-            try {
-                val jsonString = withTimeout(35_000L) {
-                    structuredModel.generateContent(fullPrompt).text
-                } ?: throw IllegalStateException("Réponse vide d'Emma.")
-                return parsePlaylistJson(jsonString, catalog)
-            } catch (e: TimeoutCancellationException) {
-                Log.w(TAG, "Primary Firebase playlist generation timed out, checking Groq fallback", e)
-                primaryFailure = e
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Primary Firebase playlist generation failed, checking Groq fallback", e)
-                primaryFailure = e
+            val playlistModels = listOf(structuredModel, structuredLiteModel)
+            for (model in playlistModels) {
+                try {
+                    val jsonString = withTimeout(45_000L) {
+                        model.generateContent(fullPrompt).text
+                    } ?: throw IllegalStateException("Réponse vide d'Emma.")
+                    return parsePlaylistJson(jsonString, catalog)
+                } catch (e: TimeoutCancellationException) {
+                    Log.w(TAG, "Primary Firebase playlist generation timed out, checking fallback", e)
+                    primaryFailure = e
+                    break
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Primary Firebase playlist generation failed, checking fallback", e)
+                    primaryFailure = e
+                    if (isNetworkUnavailable(e)) break
+                    val lower = e.message.orEmpty().lowercase()
+                    if (lower.contains("403") || lower.contains("app check") || lower.contains("attestation")) break
+                }
             }
-        }
-
-        if (primaryFailure != null && isNetworkUnavailable(primaryFailure)) {
-            throw IllegalStateException(mapUserError(primaryFailure, "Erreur lors de la création du mix."))
         }
 
         if (hasGroqKey()) {
             return try {
                 generatePlaylistWithGroq(fullPrompt, catalog)
             } catch (e: CancellationException) {
-                throw e
-            } catch (e: IllegalStateException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Groq playlist fallback failed", e)
@@ -281,13 +298,13 @@ class MusicAssistantManager(
             }
 
             val geminiModels = listOf(
-                getOrCreateChatModel("gemini-3.8-flash", systemPrompt),
-                getOrCreateChatModel("gemini-3.5-flash-lite", systemPrompt)
+                getOrCreateChatModel(GEMINI_PRIMARY_MODEL, systemPrompt),
+                getOrCreateChatModel(GEMINI_LITE_MODEL, systemPrompt)
             )
             for (model in geminiModels) {
                 val accumulated = StringBuilder()
                 try {
-                    withTimeout(30_000L) {
+                    withTimeout(45_000L) {
                         model.generateContentStream(geminiPrompt).collect { chunk ->
                             val piece = chunk.text.orEmpty()
                             if (piece.isNotEmpty()) {
@@ -316,10 +333,6 @@ class MusicAssistantManager(
             }
         }
 
-        if (primaryFailure != null && isNetworkUnavailable(primaryFailure)) {
-            throw IllegalStateException(mapUserError(primaryFailure, "Erreur de connexion avec Emma. Réessayez."))
-        }
-
         if (hasGroqKey()) {
             try {
                 streamChatWithGroq(
@@ -331,8 +344,6 @@ class MusicAssistantManager(
                 )
                 return@flow
             } catch (e: CancellationException) {
-                throw e
-            } catch (e: IllegalStateException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Groq chat fallback failed", e)
@@ -384,7 +395,7 @@ class MusicAssistantManager(
 
         if (isFirebaseReady()) {
             try {
-                val raw = withTimeout(20_000L) {
+                val raw = withTimeout(30_000L) {
                     proactiveNotificationModel.generateContent(prompt).text
                 }
                 val cleaned = sanitizeNotificationText(raw)
@@ -478,7 +489,7 @@ class MusicAssistantManager(
                 val payload = JSONObject().apply {
                     put("model", modelId)
                     put("temperature", 0.6)
-                    put("max_completion_tokens", 1024)
+                    put("max_completion_tokens", 1400)
                     put("response_format", JSONObject().put("type", "json_object"))
                     put("messages", JSONArray().apply {
                         put(JSONObject().put("role", "system").put("content", "$EMMA_PLAYLIST_INSTRUCTION\n$jsonSchemaGuide"))
@@ -508,14 +519,16 @@ class MusicAssistantManager(
                     val content = root.getJSONArray("choices")
                         .getJSONObject(0)
                         .getJSONObject("message")
-                        .getString("content")
+                        .optString("content", "")
+                    if (content.isBlank()) {
+                        throw IOException("Réponse vide du modèle $modelId")
+                    }
                     return@withContext parsePlaylistJson(content, catalog)
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: IllegalStateException) {
-                throw e
             } catch (e: Exception) {
+                Log.w(TAG, "Groq playlist attempt failed for $modelId: ${e.message}")
                 lastException = e
                 if (modelId == modelsToTry.last() || isNetworkUnavailable(e)) {
                     throw e
@@ -527,33 +540,56 @@ class MusicAssistantManager(
     }
 
     private suspend fun generateSingleLineWithGroq(systemInstruction: String, userPrompt: String): String = withContext(Dispatchers.IO) {
-        val payload = JSONObject().apply {
-            put("model", GROQ_SECONDARY_MODEL)
-            put("temperature", 0.75)
-            put("max_completion_tokens", 80)
-            put("messages", JSONArray().apply {
-                put(JSONObject().put("role", "system").put("content", systemInstruction))
-                put(JSONObject().put("role", "user").put("content", userPrompt))
-            })
-        }
-        val request = Request.Builder()
-            .url(GROQ_ENDPOINT)
-            .addHeader("Authorization", "Bearer ${groqApiKeyProvider().trim()}")
-            .addHeader("Content-Type", "application/json")
-            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
-            .build()
+        val modelsToTry = listOf(GROQ_SECONDARY_MODEL, GROQ_PRIMARY_MODEL)
+        var lastException: Exception? = null
+        for (modelId in modelsToTry) {
+            try {
+                val payload = JSONObject().apply {
+                    put("model", modelId)
+                    put("temperature", 0.75)
+                    put("max_completion_tokens", 120)
+                    put("messages", JSONArray().apply {
+                        put(JSONObject().put("role", "system").put("content", systemInstruction))
+                        put(JSONObject().put("role", "user").put("content", userPrompt))
+                    })
+                }
+                val request = Request.Builder()
+                    .url(GROQ_ENDPOINT)
+                    .addHeader("Authorization", "Bearer ${groqApiKeyProvider().trim()}")
+                    .addHeader("Content-Type", "application/json")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+                    .build()
 
-        httpClient.newCall(request).execute().use { response ->
-            val rawBody = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                throw IOException(extractGroqErrorMessage(rawBody, response.code))
+                httpClient.newCall(request).execute().use { response ->
+                    val rawBody = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        val errMsg = extractGroqErrorMessage(rawBody, response.code)
+                        if (isModelFallbackEligible(response.code, errMsg) && modelId != modelsToTry.last()) {
+                            lastException = IOException(errMsg)
+                            return@use
+                        }
+                        throw IOException(errMsg)
+                    }
+                    val root = JSONObject(rawBody)
+                    val text = root.getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .optString("content", "")
+                    if (text.isBlank()) {
+                        throw IOException("Réponse vide du modèle $modelId")
+                    }
+                    return@withContext text
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastException = e
+                if (modelId == modelsToTry.last() || isNetworkUnavailable(e)) {
+                    throw e
+                }
             }
-            val root = JSONObject(rawBody)
-            return@withContext root.getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
         }
+        throw (lastException ?: IOException("Réponse vide d'Emma."))
     }
 
     private suspend fun streamChatWithGroq(
@@ -588,7 +624,7 @@ class MusicAssistantManager(
                 val payload = JSONObject().apply {
                     put("model", modelId)
                     put("temperature", 0.65)
-                    put("max_completion_tokens", 700)
+                    put("max_completion_tokens", 1400)
                     put("stream", true)
                     put("messages", messagesArray)
                 }
@@ -632,15 +668,14 @@ class MusicAssistantManager(
                     }
 
                     if (accumulated.isBlank()) {
-                        throw IllegalStateException("Réponse vide d'Emma.")
+                        throw IOException("Réponse vide du modèle $modelId")
                     }
                     return
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: IllegalStateException) {
-                throw e
             } catch (e: Exception) {
+                Log.w(TAG, "Groq stream failed for $modelId: ${e.message}")
                 lastException = e
                 if (modelId == modelsToTry.last() || isNetworkUnavailable(e)) {
                     throw e
@@ -686,7 +721,12 @@ class MusicAssistantManager(
     }
 
     private fun isModelFallbackEligible(httpCode: Int, message: String): Boolean {
+        if (httpCode == 401) return false
         val lower = message.lowercase()
-        return httpCode == 400 || httpCode == 404 || lower.contains("model") || lower.contains("decommissioned")
+        return httpCode in listOf(400, 404, 429, 500, 502, 503) ||
+            lower.contains("model") ||
+            lower.contains("decommissioned") ||
+            lower.contains("rate") ||
+            lower.contains("overload")
     }
 }

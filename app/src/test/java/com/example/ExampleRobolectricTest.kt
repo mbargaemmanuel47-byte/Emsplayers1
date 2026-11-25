@@ -191,6 +191,8 @@ class ExampleRobolectricTest {
         assertTrue(com.example.ai.MusicAssistantManager.EMMA_SYSTEM_INSTRUCTION.contains("experte en musique"))
         assertTrue(com.example.ai.MusicAssistantManager.EMMA_SYSTEM_INSTRUCTION.contains("uniquement"))
         assertTrue(com.example.ai.MusicAssistantManager.EMMA_PLAYLIST_INSTRUCTION.contains("Emma"))
+        assertEquals("gemini-3.8-flash", com.example.ai.MusicAssistantManager.GEMINI_PRIMARY_MODEL)
+        assertEquals("gemini-3.5-flash-lite", com.example.ai.MusicAssistantManager.GEMINI_LITE_MODEL)
         assertEquals("openai/gpt-oss-120b", com.example.ai.MusicAssistantManager.GROQ_PRIMARY_MODEL)
         assertNotNull(BuildConfig.GROQ_API_KEY)
 

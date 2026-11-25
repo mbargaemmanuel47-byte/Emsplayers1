@@ -888,7 +888,7 @@ private fun CopilotChatCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 180.dp, max = 330.dp)
+                .heightIn(min = 120.dp, max = 280.dp)
                 .verticalScroll(chatScrollState),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
