@@ -264,7 +264,7 @@ class MusicAssistantManager(
                     primaryFailure = e
                     if (isNetworkUnavailable(e)) break
                     val lower = e.message.orEmpty().lowercase()
-                    if (lower.contains("403") || lower.contains("app check") || lower.contains("attestation")) break
+                    if (lower.contains("403") || lower.contains("app check") || lower.contains("attestation") || lower.contains("recaptcha")) break
                 }
             }
         }
@@ -350,7 +350,7 @@ class MusicAssistantManager(
                     primaryFailure = e
                     if (isNetworkUnavailable(e)) break
                     val lower = e.message.orEmpty().lowercase()
-                    if (lower.contains("403") || lower.contains("app check") || lower.contains("attestation")) break
+                    if (lower.contains("403") || lower.contains("app check") || lower.contains("attestation") || lower.contains("recaptcha")) break
                 }
             }
         }

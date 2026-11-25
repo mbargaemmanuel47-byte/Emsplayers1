@@ -49,16 +49,39 @@ jobs:
             ln -sfn "$SDK_DIR/platforms/android-36" "$SDK_DIR/platforms/android-36.1"
           fi
 
-      - name: Prepare .env & keystores
+      - name: Prepare .env, Firebase config & keystores
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ ! -f app/google-services.json ]; then
-            echo "::warning::app/google-services.json absent du dépôt GitHub : Firebase AI Logic sera désactivé dans cet APK."
+          if [ ! -f app/google-services.json ] && [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            if printf '%s' "$GOOGLE_SERVICES_JSON" | grep -q '"project_info"'; then
+              printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            else
+              printf '%s' "$GOOGLE_SERVICES_JSON" | tr -d '\n\r ' | base64 -d > app/google-services.json
+            fi
           fi
+
+          FIREBASE_READY="false"
+          if [ -f app/google-services.json ] && grep -q '"project_info"' app/google-services.json; then
+            FIREBASE_READY="true"
+          else
+            rm -f app/google-services.json
+          fi
+
+          CLEAN_GROQ_KEY=$(printf '%s' "${GROQ_API_KEY:-}" | tr -d '\r\n' | xargs || true)
+          GROQ_READY="false"
           : > .env
-          if [ -n "$GROQ_API_KEY" ]; then
-            printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> .env
+          if [ -n "$CLEAN_GROQ_KEY" ] && [ "$CLEAN_GROQ_KEY" != "GROQ_API_KEY_DEFAULT_VALUE" ]; then
+            printf 'GROQ_API_KEY=%s\n' "$CLEAN_GROQ_KEY" >> .env
+            GROQ_READY="true"
+          fi
+
+          if [ "$FIREBASE_READY" = "false" ] && [ "$GROQ_READY" = "false" ]; then
+            echo "::warning::Emma IA désactivée dans cet APK : ni app/google-services.json (ou secret GOOGLE_SERVICES_JSON) ni secret GROQ_API_KEY ne sont configurés dans GitHub."
+            echo "AI_STATUS_NOTE=⚠️ Emma IA inactive : aucun secret GOOGLE_SERVICES_JSON ou GROQ_API_KEY configuré sur GitHub au moment du build." >> "$GITHUB_ENV"
+          else
+            echo "AI_STATUS_NOTE=✅ Emma IA active (Firebase=$FIREBASE_READY, Groq=$GROQ_READY)." >> "$GITHUB_ENV"
           fi
           if [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
@@ -132,17 +155,18 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           TAG="latest"
+          NOTES="APK Android Em Player (Release reCAPTCHA App Check, signé v1 + v2, compatible Android 6.0+ et partage Bluetooth/Xender). ${AI_STATUS_NOTE:-}"
           RELEASE_ID=$(gh api "repos/$REPO/releases?per_page=30" --jq ".[] | select(.tag_name == \"$TAG\") | .id" 2>/dev/null | head -n 1 || true)
           if [ -z "$RELEASE_ID" ]; then
             gh release create "$TAG" EmPlayer.apk \
               --target "${{ github.sha }}" \
               --title "Em Player APK" \
-              --notes "APK Android Em Player (Release reCAPTCHA App Check, signé v1 + v2, compatible Android 6.0+ et partage Bluetooth/Xender)."
+              --notes "$NOTES"
           else
             ASSET_IDS=$(gh api "repos/$REPO/releases/$RELEASE_ID/assets" --jq '.[] | select(.name == "EmPlayer.apk") | .id' 2>/dev/null || true)
             for AID in $ASSET_IDS; do
               gh api -X DELETE "repos/$REPO/releases/assets/$AID" || true
             done
-            gh api -X PATCH "repos/$REPO/releases/$RELEASE_ID" -f target_commitish="${{ github.sha }}" -F draft=false >/dev/null 2>&1 || true
+            gh api -X PATCH "repos/$REPO/releases/$RELEASE_ID" -f target_commitish="${{ github.sha }}" -f body="$NOTES" -F draft=false >/dev/null 2>&1 || true
             gh release upload "$TAG" EmPlayer.apk --clobber
           fi
