@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -126,10 +130,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view latest >/dev/null 2>&1; then
-            gh release upload latest EmPlayer.apk --clobber
-          else
-            gh release create latest EmPlayer.apk \
+          REPO="${{ github.repository }}"
+          TAG="latest"
+          RELEASE_ID=$(gh api "repos/$REPO/releases?per_page=30" --jq ".[] | select(.tag_name == \"$TAG\") | .id" 2>/dev/null | head -n 1 || true)
+          if [ -z "$RELEASE_ID" ]; then
+            gh release create "$TAG" EmPlayer.apk \
+              --target "${{ github.sha }}" \
               --title "Em Player APK" \
               --notes "APK Android Em Player (Release reCAPTCHA App Check, signé v1 + v2, compatible Android 6.0+ et partage Bluetooth/Xender)."
+          else
+            ASSET_IDS=$(gh api "repos/$REPO/releases/$RELEASE_ID/assets" --jq '.[] | select(.name == "EmPlayer.apk") | .id' 2>/dev/null || true)
+            for AID in $ASSET_IDS; do
+              gh api -X DELETE "repos/$REPO/releases/assets/$AID" || true
+            done
+            gh api -X PATCH "repos/$REPO/releases/$RELEASE_ID" -f target_commitish="${{ github.sha }}" -F draft=false >/dev/null 2>&1 || true
+            gh release upload "$TAG" EmPlayer.apk --clobber
           fi
